@@ -1,8 +1,10 @@
 package skillsdir
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -262,5 +264,251 @@ func TestFindSiblingNoSkillsNextToTestBinary(t *testing.T) {
 	dir, src, found := findSibling()
 	if found {
 		t.Errorf("findSibling(): got found=true dir=%q src=%v; want false (test binary's dir has no sibling skills/)", dir, src)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Rule 3 tests (walk-up) + Find() combiner tests (P1.M1.T2.S3).
+// ---------------------------------------------------------------------------
+
+// makeSkill creates <dir>/skills/<tag>/SKILL.md and returns the skills dir.
+func makeSkill(t *testing.T, dir, tag string) string {
+	t.Helper()
+	skills := filepath.Join(dir, "skills")
+	skillDir := filepath.Join(skills, tag)
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", skillDir, err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# skill\n"), 0o644); err != nil {
+		t.Fatalf("write SKILL.md: %v", err)
+	}
+	return skills
+}
+
+// --- hasSkillMD ---
+
+func TestHasSkillMDFoundNested(t *testing.T) {
+	skills := filepath.Join(t.TempDir(), "skills")
+	if err := os.MkdirAll(filepath.Join(skills, "a", "b"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skills, "a", "b", "SKILL.md"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !hasSkillMD(skills) {
+		t.Errorf("hasSkillMD(nested SKILL.md): got false; want true (WalkDir recurses)")
+	}
+}
+
+func TestHasSkillMDFoundShallow(t *testing.T) {
+	skills := makeSkill(t, t.TempDir(), "foo")
+	if !hasSkillMD(skills) {
+		t.Errorf("hasSkillMD(shallow SKILL.md): got false; want true")
+	}
+}
+
+func TestHasSkillMDEmpty(t *testing.T) {
+	skills := filepath.Join(t.TempDir(), "skills")
+	if err := os.MkdirAll(skills, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if hasSkillMD(skills) {
+		t.Errorf("hasSkillMD(empty skills): got true; want false")
+	}
+}
+
+func TestHasSkillMDOnlyNonSkillFiles(t *testing.T) {
+	skills := filepath.Join(t.TempDir(), "skills")
+	if err := os.MkdirAll(skills, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skills, "README.md"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if hasSkillMD(skills) {
+		t.Errorf("hasSkillMD(only README.md): got true; want false (name must be SKILL.md)")
+	}
+}
+
+// --- findWalkUpAncestor (the testable core; no cwd dependency) ---
+
+// Rule 3: start IS the repo -> skills at start wins (cwd itself is checked first).
+func TestFindWalkUpAncestorAtStart(t *testing.T) {
+	root := t.TempDir()
+	skills := makeSkill(t, root, "foo")
+	got, found := findWalkUpAncestor(root)
+	if !found {
+		t.Fatalf("findWalkUpAncestor(start=repo): found=false; want true")
+	}
+	if got != skills {
+		t.Errorf("findWalkUpAncestor: dir=%q; want %q", got, skills)
+	}
+}
+
+// Rule 3: skills is several levels up -> ascent finds it.
+func TestFindWalkUpAncestorDeep(t *testing.T) {
+	root := t.TempDir()
+	skills := makeSkill(t, root, "bar")
+	deep := filepath.Join(root, "a", "b", "c")
+	if err := os.MkdirAll(deep, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got, found := findWalkUpAncestor(deep)
+	if !found {
+		t.Fatalf("findWalkUpAncestor(deep): found=false; want true")
+	}
+	if got != skills {
+		t.Errorf("findWalkUpAncestor(deep): dir=%q; want %q", got, skills)
+	}
+}
+
+// Rule 3: a nested SKILL.md (skills/x/y/SKILL.md) counts (hasSkillMD recurses).
+func TestFindWalkUpAncestorNestedSkillMD(t *testing.T) {
+	root := t.TempDir()
+	skills := filepath.Join(root, "skills")
+	if err := os.MkdirAll(filepath.Join(skills, "x", "y"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skills, "x", "y", "SKILL.md"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, found := findWalkUpAncestor(root)
+	if !found || got != skills {
+		t.Errorf("findWalkUpAncestor(nested): found=%v dir=%q; want true %q", found, got, skills)
+	}
+}
+
+// Rule 3 CONTRACT: a skills/ dir that exists but has NO SKILL.md is SKIPPED and
+// ascent continues to a higher ancestor that DOES have one. PRD §8.3 qualifies
+// the match with "at least one SKILL.md".
+func TestFindWalkUpAncestorSkipsEmptyAndContinues(t *testing.T) {
+	root := t.TempDir()
+	// root/a/skills = EMPTY (no SKILL.md); root/skills/foo/SKILL.md = real.
+	if err := os.MkdirAll(filepath.Join(root, "a", "skills"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	realSkills := makeSkill(t, root, "foo")
+	start := filepath.Join(root, "a", "sub")
+	if err := os.MkdirAll(start, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got, found := findWalkUpAncestor(start)
+	if !found {
+		t.Fatalf("findWalkUpAncestor(skip-empty): found=false; want true")
+	}
+	if got != realSkills {
+		t.Errorf("findWalkUpAncestor(skip-empty): dir=%q; want the higher real skills %q", got, realSkills)
+	}
+}
+
+// Rule 3: no skills anywhere up to root -> miss.
+func TestFindWalkUpAncestorNoSkills(t *testing.T) {
+	if _, found := findWalkUpAncestor(t.TempDir()); found {
+		t.Errorf("findWalkUpAncestor(no skills): got found=true; want false")
+	}
+}
+
+// Rule 3: a 'skills' entry that is a regular FILE is skipped (IsDir guard).
+func TestFindWalkUpAncestorSkillsIsFile(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "skills"), []byte("not a dir"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, found := findWalkUpAncestor(root); found {
+		t.Errorf("findWalkUpAncestor(skills is file): got found=true; want false")
+	}
+}
+
+// --- findWalkUp (the rule-3 entry; os.Getwd exercised via t.Chdir) ---
+
+// t.Chdir (Go 1.24+) changes cwd for the test and restores it on cleanup, so
+// findWalkUp (which calls os.Getwd) is testable without global cwd pollution.
+
+// Rule 3 via findWalkUp: chdir into a subdir of a temp repo and confirm walk-up
+// resolves to the repo's skills/, returning SourceWalkUp.
+func TestFindWalkUpFindsAncestor(t *testing.T) {
+	root := t.TempDir()
+	skills := makeSkill(t, root, "example")
+	sub := filepath.Join(root, "sub")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(sub)
+	got, src, found := findWalkUp()
+	if !found {
+		t.Fatalf("findWalkUp(): found=false; want true")
+	}
+	if src != SourceWalkUp {
+		t.Errorf("findWalkUp(): src=%v; want SourceWalkUp", src)
+	}
+	if got != skills {
+		t.Errorf("findWalkUp(): dir=%q; want %q", got, skills)
+	}
+}
+
+// --- Find (the public combiner) ---
+
+// Find: rule 1 wins when SKPP_SKILLS_DIR is set to an existing dir.
+func TestFindRuleEnvWins(t *testing.T) {
+	unsetEnvVar(t)
+	dir := t.TempDir()
+	t.Setenv(envVar, dir)
+	got, src, err := Find()
+	if err != nil {
+		t.Fatalf("Find() env set: err=%v; want nil", err)
+	}
+	if src != SourceEnv {
+		t.Errorf("Find() env set: src=%v; want SourceEnv", src)
+	}
+	if want := filepath.Clean(dir); got != want {
+		t.Errorf("Find() env set: dir=%q; want %q", got, want)
+	}
+}
+
+// Find: rule 3 wins when env is unset and cwd has an ancestor skills/ with a
+// SKILL.md. (findSibling deterministically misses in a test because the test
+// binary runs from a temp build dir with no sibling skills/.)
+func TestFindRuleWalkUpWins(t *testing.T) {
+	unsetEnvVar(t)
+	root := t.TempDir()
+	skills := makeSkill(t, root, "example")
+	sub := filepath.Join(root, "sub")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(sub)
+	got, src, err := Find()
+	if err != nil {
+		t.Fatalf("Find() walk-up: err=%v; want nil", err)
+	}
+	if src != SourceWalkUp {
+		t.Errorf("Find() walk-up: src=%v; want SourceWalkUp", src)
+	}
+	if got != skills {
+		t.Errorf("Find() walk-up: dir=%q; want %q", got, skills)
+	}
+}
+
+// Find: all three rules miss -> ErrNotFound. (chdir into an empty temp dir; the
+// walk ascends to /, which has no skills/ on this host — verified hermetic.)
+func TestFindAllMissReturnsErrNotFound(t *testing.T) {
+	unsetEnvVar(t)
+	t.Chdir(t.TempDir())
+	got, src, err := Find()
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Find() all-miss: err=%v; want ErrNotFound", err)
+	}
+	if got != "" || src != 0 {
+		t.Errorf("Find() all-miss: got=%q src=%v; want \"\" and 0", got, src)
+	}
+}
+
+// ErrNotFound message carries the user-facing one-line fix (PRD §8.4 / §6.4).
+func TestErrNotFoundMessageHasFix(t *testing.T) {
+	msg := ErrNotFound.Error()
+	for _, want := range []string{"SKPP_SKILLS_DIR", "cd", "reinstall"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("ErrNotFound message %q missing substring %q", msg, want)
+		}
 	}
 }

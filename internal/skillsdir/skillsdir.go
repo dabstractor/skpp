@@ -14,6 +14,8 @@
 package skillsdir
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 )
@@ -124,4 +126,118 @@ func resolveSiblingFromExe(exe string) (dir string, found bool) {
 		return "", false // no existing skills/ sibling -> rule misses
 	}
 	return candidate, true
+}
+
+// ---------------------------------------------------------------------------
+// Rule 3 — walk up from the current working directory (PRD §8.3).
+//
+// Used for `go run` / dev, where the binary lives in a temp build dir and
+// rules 1-2 both miss. The first ancestor (including cwd) whose skills/ subdir
+// contains at least one SKILL.md (at any depth) wins.
+// ---------------------------------------------------------------------------
+
+// errSkillMDFound is a sentinel error used to short-circuit filepath.WalkDir as
+// soon as the first SKILL.md is found, so hasSkillMD does not walk the entire
+// tree. Returning any non-nil error from a WalkDir callback stops the walk.
+var errSkillMDFound = errors.New("SKILL.md found")
+
+// hasSkillMD reports whether dir contains at least one SKILL.md at any depth.
+// It walks the tree under dir but returns true as soon as it finds one (early
+// exit via the errSkillMDFound sentinel). PRD §8.3 requires "at least one
+// SKILL.md" — a skills/ dir with none does not count.
+//
+// NOTE: filepath.Glob with a "**" pattern is intentionally NOT used: Go's
+// path/filepath does not support "**" (it behaves like single-level "*"), so
+// Glob("skills/**/SKILL.md") matches nothing for a nested file. WalkDir is the
+// correct stdlib tool and recurses to arbitrary depth.
+func hasSkillMD(dir string) bool {
+	found := false
+	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil // skip unreadable entry, keep walking
+		}
+		if !d.IsDir() && d.Name() == "SKILL.md" {
+			found = true
+			return errSkillMDFound // stop the walk
+		}
+		return nil
+	})
+	return found
+}
+
+// findWalkUpAncestor implements the ascent core of rule 3, factored out so it
+// can be tested with an arbitrary start directory (os.Getwd itself cannot be
+// controlled without chdir; findWalkUpAncestor takes start as a parameter).
+//
+// It checks start, then each ancestor, for a skills/ subdir that contains at
+// least one SKILL.md. A skills/ dir that exists but has no SKILL.md is skipped
+// and ascent continues (PRD §8.3 qualifies the match with "at least one
+// SKILL.md"). Ascent stops at the filesystem root, where filepath.Dir(root)
+// equals root.
+func findWalkUpAncestor(start string) (dir string, found bool) {
+	cur := filepath.Clean(start)
+	for {
+		candidate := filepath.Join(cur, "skills")
+		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+			if hasSkillMD(candidate) {
+				return candidate, true
+			}
+			// skills/ exists here but has no SKILL.md -> keep ascending.
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return "", false // reached filesystem root, no match
+		}
+		cur = parent
+	}
+}
+
+// findWalkUp implements PRD §8 rule 3 — ascend from the current working
+// directory and return the first ancestor whose skills/ subdir contains at
+// least one SKILL.md. This is the rule that makes `go run` work when the binary
+// is in a temp build dir and rules 1-2 miss.
+//
+// Returns (candidate, SourceWalkUp, true) on a hit; ("", 0, false) otherwise so
+// Find() can return ErrNotFound. Never errors (matches the locked per-rule shape).
+func findWalkUp() (dir string, src Source, found bool) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", 0, false // cwd unresolvable -> rule misses
+	}
+	d, ok := findWalkUpAncestor(cwd)
+	if !ok {
+		return "", 0, false
+	}
+	return d, SourceWalkUp, true
+}
+
+// ---------------------------------------------------------------------------
+// Find — the public entry point (PRD §8 priority order).
+// ---------------------------------------------------------------------------
+
+// ErrNotFound is returned by Find when all three §8 rules miss. Its message is
+// the user-facing one-line fix (PRD §8.4 / §6.4): main prints it to stderr and
+// exits 1. Print it verbatim (err.Error()); do not wrap or prefix it.
+var ErrNotFound = errors.New("could not locate the skills directory: set $SKPP_SKILLS_DIR, cd into the skpp repo, or reinstall skpp")
+
+// Find locates the skills directory per PRD §8 priority order:
+//
+//  1. SKPP_SKILLS_DIR env var (rule 1, findEnv).
+//  2. Sibling of the running binary, symlink-aware (rule 2, findSibling).
+//  3. Walk up from cwd (rule 3, findWalkUp).
+//
+// The first rule to hit wins and Find returns (absDir, src, nil). If all three
+// miss it returns ("", 0, ErrNotFound); the caller (main) prints the error to
+// stderr and exits 1.
+func Find() (dir string, src Source, err error) {
+	if d, s, ok := findEnv(); ok {
+		return d, s, nil
+	}
+	if d, s, ok := findSibling(); ok {
+		return d, s, nil
+	}
+	if d, s, ok := findWalkUp(); ok {
+		return d, s, nil
+	}
+	return "", 0, ErrNotFound
 }

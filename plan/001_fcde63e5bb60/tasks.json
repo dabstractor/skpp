@@ -11,7 +11,7 @@
           "type": "Milestone",
           "id": "P1.M1",
           "title": "Foundation & skills-dir location (PRD §8, build order step 1)",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Establish the buildable Go skeleton (go.mod, .gitignore, LICENSE) and implement the single most failure-prone area: locating the skills/ dir via the §8 priority order (env var -> sibling-of-binary via os.Executable+EvalSymlinks -> walk-up-from-cwd). Prove it with a minimal `skpp --path` / `skpp --version`. PRD §13/§18 say do this first.",
           "tasks": [
             {
@@ -42,7 +42,7 @@
               "type": "Task",
               "id": "P1.M1.T2",
               "title": "internal/skillsdir — locate the skills dir (§8 priority order)",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Implement the hardest, most failure-prone component: resolving the skills/ directory without a manifest. Priority order (first hit wins): (1) $SKPP_SKILLS_DIR env var, (2) sibling of the running binary via os.Executable()+EvalSymlinks(), (3) walk up from cwd to first ancestor with skills/ containing a SKILL.md, (4) error. Must be symlink-aware so symlink installs resolve back to the repo.",
               "subtasks": [
                 {
@@ -80,7 +80,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T2.S3",
                   "title": "Walk-up-from-cwd resolution (rule 3) + Find() combiner",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T2.S2"
@@ -97,14 +97,14 @@
               "type": "Task",
               "id": "P1.M1.T3",
               "title": "main.go entrypoint — --path & --version (prove location resolution)",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Create the main.go entrypoint with minimal arg parsing sufficient to prove skills-dir resolution end-to-end: `skpp --path` prints the resolved skills dir, `skpp --version` prints the version. Establishes the exit-code/stdout/stderr discipline and the version-injection ldflags pattern used by install.sh.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M1.T3.S1",
                   "title": "main.go: arg-parse skeleton + --path + --version + exit codes",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T2.S3"
