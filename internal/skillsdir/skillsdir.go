@@ -75,3 +75,53 @@ func findEnv() (dir string, src Source, found bool) {
 	}
 	return abs, SourceEnv, true
 }
+
+// findSibling implements PRD §8 rule 2 — locate <repoDir>/skills next to the
+// running binary, symlink-aware. This is the rule that makes a symlink install
+// work: ~/.local/bin/skpp -> ~/projects/skpp/skpp resolves back to the repo.
+//
+// It is a thin entry that asks the OS for the running binary (os.Executable)
+// and delegates the symlink/dir logic to resolveSiblingFromExe. os.Executable
+// cannot be controlled in a test (it returns the test binary's own path), so
+// the testable core lives in resolveSiblingFromExe.
+//
+// Returns (candidate, SourceSibling, true) on a hit; ("", 0, false) otherwise so
+// Find() (S3) can fall through to rule 3. Never errors (locked per-rule shape).
+func findSibling() (dir string, src Source, found bool) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", 0, false // no binary path at all -> skip rule
+	}
+	d, ok := resolveSiblingFromExe(exe)
+	if !ok {
+		return "", 0, false
+	}
+	return d, SourceSibling, true
+}
+
+// resolveSiblingFromExe is the symlink-aware sibling-resolution core for rule 2,
+// factored out so it can be unit-tested with arbitrary exe paths.
+//
+// PRD §8.2 sequence:
+//
+//	real, err := filepath.EvalSymlinks(exe)  // REQUIRED on macOS (redundant but
+//	                                         //   harmless on Linux via /proc/self/exe)
+//	if err != nil { real = exe }             // fall back to raw exe on EvalSymlinks error
+//	repoDir := filepath.Dir(real)
+//	candidate := filepath.Join(repoDir, "skills")
+//	win iff os.Stat(candidate) reports an existing directory
+//
+// See architecture/verified_symlink_resolution.md for why EvalSymlinks must stay.
+func resolveSiblingFromExe(exe string) (dir string, found bool) {
+	real, err := filepath.EvalSymlinks(exe)
+	if err != nil {
+		real = exe // EvalSymlinks could not resolve -> use exe verbatim
+	}
+	repoDir := filepath.Dir(real)
+	candidate := filepath.Join(repoDir, "skills")
+	info, err := os.Stat(candidate)
+	if err != nil || !info.IsDir() {
+		return "", false // no existing skills/ sibling -> rule misses
+	}
+	return candidate, true
+}

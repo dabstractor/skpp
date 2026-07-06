@@ -148,3 +148,119 @@ func TestFindEnvDoesNotResolveSymlinks(t *testing.T) {
 		t.Errorf("findEnv() symlink-to-dir: dir=%q; want symlink path (absolutized) %q", got, want)
 	}
 }
+
+// makeFakeBinary creates a regular file at dir/name to stand in for a compiled
+// binary. EvalSymlinks + os.Stat(Join(dir,"skills")) do not require a real ELF,
+// so a 1-byte file is sufficient (research/verified_facts.md §5).
+func makeFakeBinary(t *testing.T, dir, name string) string {
+	t.Helper()
+	p := filepath.Join(dir, name)
+	if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
+		t.Fatalf("write fake binary %s: %v", p, err)
+	}
+	return p
+}
+
+// --- resolveSiblingFromExe (the testable core) ---
+
+// Rule 2 CONTRACT: a symlink to the binary in a DIFFERENT dir must resolve back
+// to the REAL binary's repo dir's skills/. Mirrors architecture/verified_symlink_resolution.md.
+func TestResolveSiblingFromExeSymlinkCrossDir(t *testing.T) {
+	// tempA holds the REAL binary + its sibling skills/
+	tempA := t.TempDir()
+	binary := makeFakeBinary(t, tempA, "skpp")
+	skillsA := filepath.Join(tempA, "skills")
+	if err := os.Mkdir(skillsA, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// tempB holds a symlink to the binary (different dir, like ~/.local/bin)
+	tempB := t.TempDir()
+	link := filepath.Join(tempB, "skpp")
+	if err := os.Symlink(binary, link); err != nil {
+		t.Skipf("symlinks not supported on this platform: %v", err)
+	}
+
+	got, found := resolveSiblingFromExe(link)
+	if !found {
+		t.Fatalf("resolveSiblingFromExe(symlink): found=false; want true")
+	}
+	if got != skillsA {
+		t.Errorf("resolveSiblingFromExe(symlink): dir=%q; want the REAL binary's skills %q", got, skillsA)
+	}
+	if filepath.Dir(got) != tempA {
+		t.Errorf("resolveSiblingFromExe(symlink): resolved to %q, not the real binary's dir %q", filepath.Dir(got), tempA)
+	}
+}
+
+// Rule 2: direct (non-symlinked) binary with a sibling skills/ also wins.
+func TestResolveSiblingFromExeDirect(t *testing.T) {
+	tempA := t.TempDir()
+	binary := makeFakeBinary(t, tempA, "skpp")
+	skillsA := filepath.Join(tempA, "skills")
+	if err := os.Mkdir(skillsA, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got, found := resolveSiblingFromExe(binary)
+	if !found {
+		t.Fatalf("resolveSiblingFromExe(direct): found=false; want true")
+	}
+	if got != skillsA {
+		t.Errorf("resolveSiblingFromExe(direct): dir=%q; want %q", got, skillsA)
+	}
+}
+
+// Rule 2: EvalSymlinks-error fallback. A non-existent exe whose parent dir DOES
+// have a sibling skills/ must still win via real=exe. (Contract: 'if err, use
+// exe as fallback.')
+func TestResolveSiblingFromExeEvalSymlinksFallback(t *testing.T) {
+	tempC := t.TempDir()
+	skillsC := filepath.Join(tempC, "skills")
+	if err := os.Mkdir(skillsC, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// 'ghost' binary does not exist -> EvalSymlinks errors -> fall back to exe.
+	ghost := filepath.Join(tempC, "does-not-exist-binary")
+	got, found := resolveSiblingFromExe(ghost)
+	if !found {
+		t.Fatalf("resolveSiblingFromExe(ghost): found=false; want true (EvalSymlinks fallback to exe)")
+	}
+	if got != skillsC {
+		t.Errorf("resolveSiblingFromExe(ghost): dir=%q; want %q (Dir(exe)/skills)", got, skillsC)
+	}
+}
+
+// Rule 2: binary exists but NO sibling skills/ dir -> miss.
+func TestResolveSiblingFromExeNoSkillsDir(t *testing.T) {
+	tempA := t.TempDir()
+	binary := makeFakeBinary(t, tempA, "skpp")
+	// deliberately create no skills/ sibling
+	if _, found := resolveSiblingFromExe(binary); found {
+		t.Errorf("resolveSiblingFromExe(no skills): got found=true; want false")
+	}
+}
+
+// Rule 2: sibling path 'skills' is a regular FILE, not a dir -> miss (IsDir guard).
+func TestResolveSiblingFromExeSkillsIsFile(t *testing.T) {
+	tempA := t.TempDir()
+	binary := makeFakeBinary(t, tempA, "skpp")
+	if err := os.WriteFile(filepath.Join(tempA, "skills"), []byte("not a dir"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, found := resolveSiblingFromExe(binary); found {
+		t.Errorf("resolveSiblingFromExe(skills is file): got found=true; want false (IsDir guard)")
+	}
+}
+
+// --- findSibling (the rule-2 entry; os.Executable exercised) ---
+
+// Smoke test: the REAL test binary runs from a temp build dir (go-buildXXX)
+// that has NO sibling skills/, so findSibling must return found=false without
+// panicking. This is the only deterministic assertion possible for findSibling
+// (os.Executable cannot be controlled); the symlink logic is covered by the
+// resolveSiblingFromExe tests above.
+func TestFindSiblingNoSkillsNextToTestBinary(t *testing.T) {
+	dir, src, found := findSibling()
+	if found {
+		t.Errorf("findSibling(): got found=true dir=%q src=%v; want false (test binary's dir has no sibling skills/)", dir, src)
+	}
+}

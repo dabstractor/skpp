@@ -42,7 +42,7 @@
               "type": "Task",
               "id": "P1.M1.T2",
               "title": "internal/skillsdir — locate the skills dir (§8 priority order)",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Implement the hardest, most failure-prone component: resolving the skills/ directory without a manifest. Priority order (first hit wins): (1) $SKPP_SKILLS_DIR env var, (2) sibling of the running binary via os.Executable()+EvalSymlinks(), (3) walk up from cwd to first ancestor with skills/ containing a SKILL.md, (4) error. Must be symlink-aware so symlink installs resolve back to the repo.",
               "subtasks": [
                 {
@@ -64,7 +64,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T2.S2",
                   "title": "Sibling-of-binary resolution (rule 2, symlink-aware)",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T2.S1"
@@ -80,7 +80,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T2.S3",
                   "title": "Walk-up-from-cwd resolution (rule 3) + Find() combiner",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T2.S2"
