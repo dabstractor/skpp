@@ -309,7 +309,7 @@
           "type": "Milestone",
           "id": "P1.M4",
           "title": "Search & validation (PRD §9, build order step 4)",
-          "status": "Planned",
+          "status": "Complete",
           "description": "Add the discovery-oriented commands: `skpp --search <q>` (case-insensitive substring over tag/name/description/keywords) reusing the ui table, and `skpp check` (validate every skill on disk per §9 with OK/WARN/ERROR lines and a summary). Both consume the discover.Index built in M2.",
           "tasks": [
             {
@@ -341,14 +341,14 @@
               "type": "Task",
               "id": "P1.M4.T10",
               "title": "skpp check — validation (§9)",
-              "status": "Planned",
+              "status": "Complete",
               "description": "Walk the store and report per-skill validation: ERROR if no SKILL.md, missing name/description, name violates Agent Skills rules, or duplicate frontmatter name; WARN if description > 1024 chars. One OK/WARN/ERROR line per skill plus a summary line. Exit 0 if clean, 1 if any ERROR.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M4.T10.S1",
                   "title": "Validation rules (§9) + output format + exit codes",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M2.T5.S1"

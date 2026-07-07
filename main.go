@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/dabstractor/skpp/internal/check"
 	"github.com/dabstractor/skpp/internal/discover"
 	"github.com/dabstractor/skpp/internal/resolve"
 	"github.com/dabstractor/skpp/internal/search"
@@ -77,10 +78,11 @@ type config struct {
 	relative   bool     // --relative     : print paths relative to the skills dir, not absolute (§6.2) [NEW]
 	noColor    bool     // --no-color     : disable ANSI color even on a TTY (§6.2)
 	tags       []string // positional <tag> args (PRD §6.1 `skpp <tag> [<tag>...]`); resolved in run
-	searchMode bool     // --search <q>/-s : substring search over tag/name/description/keywords (§6.1) [NEW]
-	searchQ    string   // the --search query value (consumed from the token after --search/-s) [NEW]
+	searchMode bool     // --search <q>/-s : substring search over tag/name/description/keywords (§6.1)
+	searchQ    string   // the --search query value (consumed from the token after --search/-s)
+	check      bool     // `skpp check` subcommand: validate every skill in the store (§9) [NEW]
 	// Future (M5), do NOT add yet:
-	//   check bool; help bool
+	//   help bool
 }
 
 // parseArgs scans argv tokens and fills a config. Flags may appear in any order
@@ -124,6 +126,15 @@ func parseArgs(args []string) config {
 				c.searchQ = args[i+1]
 				i++
 			}
+		case "check":
+			// `skpp check` subcommand (PRD §9). `check` is a RESERVED positional
+			// token: it selects validation mode and is NOT captured as a tag. A
+			// skill literally tagged `check` cannot be resolved via `skpp check`
+			// (subcommand names are reserved, as in any CLI). P1.M5.T11 turns
+			// `check` mixed with tags/--list/--search/--all into a §6.3 exit-2
+			// error; for now check wins silently in run() dispatch (mirrors how
+			// searchMode currently wins over tags).
+			c.check = true
 		default:
 			// Positional <tag> (PRD §6.1 `skpp <tag> [<tag>...]`): a token that
 			// does NOT start with '-' is a tag, captured here and resolved in run.
@@ -232,6 +243,58 @@ func run(args []string, stdout, stderr io.Writer) int {
 			return 1
 		}
 		ui.PrintList(stdout, matched, isTerminal(stdout) && !c.noColor)
+		return 0
+	}
+
+	// `skpp check` subcommand (PRD §9). Validates every skill in the store and
+	// prints a report: one line per problem (prefixed ERROR/WARN) plus one OK line
+	// per clean skill, ending with a "N skills, M errors, K warnings" summary. Exit
+	// 0 if there are no ERRORs, 1 if there are any (WARNs never change the exit
+	// code, so `if skpp check; then …` works as a gate). An empty store is clean
+	// (0 skills, 0 errors, 0 warnings) -> exit 0 (check is validation: no skills ==
+	// nothing wrong, unlike --list which exits 1 on empty).
+	//
+	// check is a REPORT, not a path emitter: it always prints its full findings to
+	// STDOUT (pipeable to less/grep, like eslint/ruff/govet) and signals pass/fail
+	// via the exit code. It is NOT subject to §6.4's "nothing on stdout on failure"
+	// — that contract is for tag/path emitters used inside $(...); check never
+	// participates in command substitution.
+	//
+	// internal/check.Check re-runs discover.ParseFrontmatter per skill to recover
+	// the malformed-YAML-vs-no-frontmatter-block distinction that discover.Index
+	// intentionally drops (index.go doc comment). --file/--relative/--no-color do
+	// NOT apply (status report, not paths/table).
+	if c.check {
+		dir, _, err := skillsdir.Find()
+		if err != nil {
+			fmt.Fprintln(stderr, err) // one-line fix (PRD §6.4/§8); stdout stays empty
+			return 1
+		}
+		skills, err := discover.Index(dir)
+		if err != nil {
+			fmt.Fprintln(stderr, err) // e.g. skills dir vanished between Find and Index
+			return 1
+		}
+		rep := check.Check(skills)
+		// Render: status word left-padded to width 5 (OK/WARN/ERROR align); OK
+		// skills get one line, problem skills get one line per finding.
+		for _, sr := range rep.BySkill {
+			name := sr.Skill.Name
+			if name == "" {
+				name = "(none)"
+			}
+			if len(sr.Findings) == 0 {
+				fmt.Fprintf(stdout, "%-5s %s (%s)\n", "OK", sr.Skill.RelTag, name)
+				continue
+			}
+			for _, f := range sr.Findings {
+				fmt.Fprintf(stdout, "%-5s %s (%s): %s\n", f.Level, sr.Skill.RelTag, name, f.Message)
+			}
+		}
+		fmt.Fprintf(stdout, "%d skills, %d errors, %d warnings\n", len(skills), rep.Errors, rep.Warnings)
+		if rep.HasErrors() {
+			return 1
+		}
 		return 0
 	}
 

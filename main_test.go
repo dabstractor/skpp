@@ -93,16 +93,17 @@ func TestParseArgsAnyOrderBothForms(t *testing.T) {
 
 // Unknown tokens are tolerated (no-op) for now; exit-2 lands in P1.M5.T11.
 // Dashed unknown flags are tolerated (no-op; exit-2 is M5). Non-dashed positional
-// tokens are now captured as <tag>s (so "sometag"/"check" land in c.tags rather
-// than being discarded). Only version/path stay false here.
+// tokens are now captured as <tag>s ("sometag"/"othertag" here). `check` is now a
+// RESERVED subcommand (P1.M4.T10.S1) and is NOT captured as a tag, so it is
+// deliberately excluded from this positional-capture test.
 func TestParseArgsUnknownTolerated(t *testing.T) {
-	c := parseArgs([]string{"--frobnicate", "sometag", "check"})
+	c := parseArgs([]string{"--frobnicate", "sometag", "othertag"})
 	if c.version || c.path {
 		t.Errorf("parseArgs(unknown): version=%v path=%v; want both false", c.version, c.path)
 	}
 	// Non-dashed positionals are captured as tags; the dashed --frobnicate is excluded.
-	if len(c.tags) != 2 || c.tags[0] != "sometag" || c.tags[1] != "check" {
-		t.Errorf("parseArgs tags=%v; want [sometag check] (positionals captured)", c.tags)
+	if len(c.tags) != 2 || c.tags[0] != "sometag" || c.tags[1] != "othertag" {
+		t.Errorf("parseArgs tags=%v; want [sometag othertag] (positionals captured)", c.tags)
 	}
 }
 
@@ -1056,5 +1057,221 @@ func TestRunVersionPrecedenceOverSearch(t *testing.T) {
 	}
 	if got := out.String(); got != "skpp "+version+"\n" {
 		t.Errorf("stdout=%q; want the version line (precedence over search)", got)
+	}
+}
+
+// --- parseArgs: `check` subcommand (P1.M4.T10.S1) ---
+
+// The bare token "check" selects the check subcommand and is NOT captured as a tag.
+func TestParseArgsCheckSubcommand(t *testing.T) {
+	c := parseArgs([]string{"check"})
+	if !c.check {
+		t.Errorf("parseArgs(check): check=false; want true")
+	}
+	if len(c.tags) != 0 {
+		t.Errorf("parseArgs(check): tags=%v; want empty ('check' is a subcommand, not a tag)", c.tags)
+	}
+}
+
+// `check` is recognized even when it follows a flag (--no-color check).
+func TestParseArgsCheckAfterFlag(t *testing.T) {
+	c := parseArgs([]string{"--no-color", "check"})
+	if !c.check {
+		t.Errorf("parseArgs(--no-color check): check=false; want true")
+	}
+	if !c.noColor {
+		t.Errorf("parseArgs(--no-color check): noColor=false; want true (flag still parsed)")
+	}
+}
+
+// `check` + a later positional: check wins in dispatch (pre-M5; M5 makes this exit 2).
+// Here we only assert both are captured as set; run() ordering is tested below.
+func TestParseArgsCheckAndTagBothCaptured(t *testing.T) {
+	c := parseArgs([]string{"check", "sometag"})
+	if !c.check {
+		t.Errorf("check not set: %+v", c)
+	}
+	if len(c.tags) != 1 || c.tags[0] != "sometag" {
+		t.Errorf("tags=%v; want [sometag]", c.tags)
+	}
+}
+
+// --- run: `skpp check` (P1.M4.T10.S1) ---
+
+// Clean store -> one OK line per skill + summary, exit 0, no ANSI, empty stderr.
+// sampleStore has example + writing/reddit, both valid.
+func TestRunCheckCleanStore(t *testing.T) {
+	dir := sampleStore(t)
+	t.Setenv("SKPP_SKILLS_DIR", dir)
+	var out, errOut bytes.Buffer
+	code := run([]string{"check"}, &out, &errOut)
+	if code != 0 {
+		t.Fatalf("run(check) clean: code=%d; want 0", code)
+	}
+	got := out.String()
+	if !strings.Contains(got, "OK") {
+		t.Errorf("clean store should have OK lines:\n%s", got)
+	}
+	if !strings.Contains(got, "example") || !strings.Contains(got, "writing/reddit") {
+		t.Errorf("both skills should appear:\n%s", got)
+	}
+	if !strings.Contains(got, "2 skills, 0 errors, 0 warnings") {
+		t.Errorf("summary line missing/wrong:\n%s", got)
+	}
+	if strings.Contains(got, "ERROR") || strings.Contains(got, "WARN") {
+		t.Errorf("clean store should have no ERROR/WARN lines:\n%s", got)
+	}
+	if errOut.Len() != 0 {
+		t.Errorf("stderr=%q; want empty", errOut.String())
+	}
+}
+
+// A store with a missing-name skill -> ERROR line on STDOUT + exit 1. Full report
+// still prints (check is a report: pass/fail is the exit code, NOT stdout emptiness).
+func TestRunCheckReportsMissingNameExit1(t *testing.T) {
+	dir := writeSkillTree(t, map[string]string{
+		"example": "---\nname: example\ndescription: d\n---\nx\n",
+		"bad":     "---\ndescription: no name here\n---\nx\n",
+	})
+	t.Setenv("SKPP_SKILLS_DIR", dir)
+	var out, errOut bytes.Buffer
+	code := run([]string{"check"}, &out, &errOut)
+	if code != 1 {
+		t.Fatalf("run(check) with a bad skill: code=%d; want 1", code)
+	}
+	got := out.String()
+	if !strings.Contains(got, "ERROR") || !strings.Contains(got, "'name' is missing") {
+		t.Errorf("stdout should report the missing-name ERROR:\n%s", got)
+	}
+	if !strings.Contains(got, "1 errors") {
+		t.Errorf("summary should count 1 error:\n%s", got)
+	}
+}
+
+// Duplicate names across skills -> two ERROR lines (one per owner) + exit 1.
+func TestRunCheckReportsDuplicateNames(t *testing.T) {
+	dir := writeSkillTree(t, map[string]string{
+		"alpha": "---\nname: dup\nmetadata:\n  category: x\n---\nx\n",
+		"beta":  "---\nname: dup\nmetadata:\n  category: x\n---\nx\n",
+	})
+	t.Setenv("SKPP_SKILLS_DIR", dir)
+	var out, errOut bytes.Buffer
+	code := run([]string{"check"}, &out, &errOut)
+	if code != 1 {
+		t.Fatalf("run(check) dups: code=%d; want 1", code)
+	}
+	got := out.String()
+	if !strings.Contains(got, "duplicate") {
+		t.Errorf("stdout should report duplicate-name ERRORs:\n%s", got)
+	}
+	// Both skills lack a description -> that's 2 more ERRORs; total >= 2 errors.
+	if !strings.Contains(got, "errors") {
+		t.Errorf("summary line missing:\n%s", got)
+	}
+}
+
+// A WARN-only problem (over-long description) -> WARN line but exit 0 (WARNs never
+// fail). Proves the exit code is driven by ERRORs only.
+func TestRunCheckWarnOnlyExitsZero(t *testing.T) {
+	long := strings.Repeat("x", 1025)
+	dir := writeSkillTree(t, map[string]string{
+		"big": "---\nname: big\ndescription: " + long + "\n---\nx\n",
+	})
+	t.Setenv("SKPP_SKILLS_DIR", dir)
+	var out, errOut bytes.Buffer
+	code := run([]string{"check"}, &out, &errOut)
+	if code != 0 {
+		t.Fatalf("run(check) warn-only: code=%d; want 0 (WARNs never fail)", code)
+	}
+	got := out.String()
+	if !strings.Contains(got, "WARN") || !strings.Contains(got, "1025 chars") {
+		t.Errorf("stdout should have the over-long WARN:\n%s", got)
+	}
+	if !strings.Contains(got, "0 errors, 1 warnings") {
+		t.Errorf("summary should be 0 errors / 1 warning:\n%s", got)
+	}
+}
+
+// Empty store -> 0 skills / 0 errors / 0 warnings, exit 0 (clean, unlike --list).
+func TestRunCheckEmptyStoreExit0(t *testing.T) {
+	dir := writeSkillTree(t, map[string]string{}) // empty skills tree
+	t.Setenv("SKPP_SKILLS_DIR", dir)
+	var out, errOut bytes.Buffer
+	code := run([]string{"check"}, &out, &errOut)
+	if code != 0 {
+		t.Fatalf("run(check) empty store: code=%d; want 0", code)
+	}
+	if got := out.String(); !strings.Contains(got, "0 skills, 0 errors, 0 warnings") {
+		t.Errorf("empty store summary wrong:\n%s", got)
+	}
+}
+
+// Skills dir unresolvable -> exit 1, EMPTY stdout, one-line fix on stderr.
+func TestRunCheckSkillsDirUnresolvable(t *testing.T) {
+	unsetSkillsEnv(t)
+	t.Chdir(t.TempDir()) // all three §8 rules miss
+	var out, errOut bytes.Buffer
+	code := run([]string{"check"}, &out, &errOut)
+	if code != 1 {
+		t.Fatalf("run(check) unresolvable: code=%d; want 1", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout=%q; want empty (no store -> no report)", out.String())
+	}
+	if !strings.Contains(errOut.String(), "SKPP_SKILLS_DIR") {
+		t.Errorf("stderr=%q; want the one-line fix", errOut.String())
+	}
+}
+
+// Status column alignment: OK/ERROR/WARN all pad to width 5.
+func TestRunCheckStatusColumnAligned(t *testing.T) {
+	dir := writeSkillTree(t, map[string]string{
+		"good": "---\nname: good\ndescription: d\n---\nx\n",
+		"bad":  "---\ndescription: missing name\n---\nx\n",
+	})
+	t.Setenv("SKPP_SKILLS_DIR", dir)
+	var out, errOut bytes.Buffer
+	run([]string{"check"}, &out, &errOut)
+	for _, line := range strings.Split(strings.TrimRight(out.String(), "\n"), "\n") {
+		if line == "" || strings.HasPrefix(line, "0 ") || strings.Contains(line, " skills,") {
+			continue // summary line
+		}
+		// Every status line starts with a 5-wide status word + a single space.
+		switch {
+		case strings.HasPrefix(line, "OK    "):
+		case strings.HasPrefix(line, "ERROR "):
+		case strings.HasPrefix(line, "WARN  "):
+		default:
+			t.Errorf("status line not 5-wide aligned: %q", line)
+		}
+	}
+}
+
+// --version precedes `check` (PRD §6.3).
+func TestRunVersionPrecedenceOverCheck(t *testing.T) {
+	dir := sampleStore(t)
+	t.Setenv("SKPP_SKILLS_DIR", dir)
+	var out, errOut bytes.Buffer
+	code := run([]string{"check", "--version"}, &out, &errOut)
+	if code != 0 {
+		t.Fatalf("run(check --version): code=%d; want 0 (version precedence)", code)
+	}
+	if got := out.String(); got != "skpp "+version+"\n" {
+		t.Errorf("stdout=%q; want the version line (precedence over check)", got)
+	}
+}
+
+// A pre-existing tag-resolution test guard: `check` is reserved, so a real skill
+// tagged `example` still resolves (the subcommand only steals the literal "check").
+func TestRunTagStillResolvesAlongsideCheck(t *testing.T) {
+	dir := sampleStore(t)
+	t.Setenv("SKPP_SKILLS_DIR", dir)
+	var out, errOut bytes.Buffer
+	code := run([]string{"example"}, &out, &errOut) // NOT "check" -> tag resolution
+	if code != 0 {
+		t.Fatalf("run(example): code=%d; want 0 (tag resolution unaffected)", code)
+	}
+	if !strings.HasSuffix(out.String(), "/example\n") {
+		t.Errorf("run(example) stdout=%q; want .../example dir", out.String())
 	}
 }
