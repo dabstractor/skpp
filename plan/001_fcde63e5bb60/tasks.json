@@ -414,14 +414,14 @@
               "type": "Task",
               "id": "P1.M6.T12",
               "title": "The one shipped example skill (§11)",
-              "status": "Planned",
+              "status": "Complete",
               "description": "Create exactly one example skill at skills/example/SKILL.md with the exact frontmatter and body from PRD §11. This makes --list/resolution demonstrable out of the box and is required for the §13 acceptance commands.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M6.T12.S1",
                   "title": "skills/example/SKILL.md (exact PRD §11 content)",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M4.T10.S1"
