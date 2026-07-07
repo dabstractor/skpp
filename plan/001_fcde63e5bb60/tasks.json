@@ -4,7 +4,7 @@
       "type": "Phase",
       "id": "P1",
       "title": "skpp v1.0 — Manifest-free skill path printer",
-      "status": "Planned",
+      "status": "Ready",
       "description": "One-shot build of the `skpp` Go CLI: resolves a human-friendly skill tag to the absolute filesystem path of a locally-stored Agent Skill, for consumption by `pi --skill <path>`. Manifest-free (disk-discovered), never in a pi auto-discovery location, loaded only via explicit `--skill`. Covers the full PRD: Go CLI (§6), discovery+resolution (§7), skills-dir location (§8), validation (§9), one example skill (§11), install.sh (§12), README (§15), and shell completions (§14). Build order follows PRD §18: skills-dir location first (hardest), then discovery, resolution, search/check, CLI polish, then packaging/docs. Research findings live in plan/001_fcde63e5bb60/architecture/.",
       "milestones": [
         {
@@ -407,7 +407,7 @@
           "type": "Milestone",
           "id": "P1.M6",
           "title": "Example skill, packaging, docs & completions (PRD §11/§12/§14/§15, build order steps 6-8)",
-          "status": "Planned",
+          "status": "Complete",
           "description": "Ship the one example skill, the install.sh (build + symlink + PATH), the README (full §15 outline), shell completions (bash/zsh/fish, dynamic via skpp --all), run the full §13 acceptance suite, and perform the final changeset-level documentation sync. With this milestone the repo is a complete, installable, documented one-shot deliverable.",
           "tasks": [
             {
@@ -524,7 +524,7 @@
               "type": "Task",
               "id": "P1.M6.T16",
               "title": "Acceptance suite + sync changeset-level documentation (Mode B)",
-              "status": "Planned",
+              "status": "Complete",
               "description": "Run the full PRD §13 acceptance criteria verbatim and fix any regressions, then perform the final cross-cutting documentation sync: ensure README matches the implemented CLI exactly, all flags/exit codes documented, and any overview docs are consistent. This is the Mode B catch-all that prevents a coherent delta from shipping with stale docs (§5).",
               "subtasks": [
                 {
@@ -553,7 +553,7 @@
                   "type": "Subtask",
                   "id": "P1.M6.T16.S2",
                   "title": "Sync changeset-level documentation (Mode B final sweep)",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1",

@@ -1,6 +1,6 @@
 # skpp
 
-Standalone skill loader for pi — resolves a skill tag to an absolute path for `pi --skill`.
+Standalone skill loader for pi. Resolves a skill tag to an absolute path for `pi --skill`.
 
 ## Why
 
@@ -67,6 +67,42 @@ ln -sfn "$PWD/skpp" ~/.local/bin/skpp
 
 Run `./skpp example` from the repo, or use the symlink from anywhere.
 
+## Shell completions
+
+`skpp` ships dynamic completions for bash, zsh, and fish. Tag completion is
+not a static list: the shell calls `skpp --relative --all` at completion time,
+so it never goes stale as you add skills.
+
+**bash** (one of):
+
+```bash
+source /path/to/skpp/completions/skpp.bash
+cp completions/skpp.bash ~/.local/share/bash-completion/completions/skpp
+cp completions/skpp.bash /etc/bash_completion.d/skpp
+```
+
+**zsh** (one of):
+
+```bash
+cp completions/_skpp ~/.zsh/completions/_skpp
+cp completions/_skpp /usr/local/share/zsh/site-functions/_skpp
+```
+
+then ensure this is in your `.zshrc`:
+
+```bash
+autoload -U compinit && compinit
+```
+
+**fish**:
+
+```bash
+cp completions/skpp.fish ~/.config/fish/completions/skpp.fish
+```
+
+`install.sh` does not install completions automatically; copy the file you
+want as shown above.
+
 ## Usage
 
 The canonical one-liner, first:
@@ -81,7 +117,7 @@ Everything else, commented:
 # Resolve a tag to an absolute path (default: the skill directory)
 skpp example                       # → /…/skills/example
 
-# Print the SKILL.md path instead of the directory
+# Print the SKILL.md path instead of the directory (-f / --file)
 skpp -f example                    # → /…/skills/example/SKILL.md
 
 # Load several skills into pi in one command
@@ -102,6 +138,12 @@ skpp check
 
 # Where is the resolved skills directory?
 skpp --path                        # → /…/skills
+
+# Print paths relative to the skills directory instead of absolute
+skpp --relative example
+
+# Disable ANSI color even on a TTY (for --list / --search tables)
+skpp --no-color --list
 
 # Version is the git-describe value (dynamic, not a fixed string)
 skpp --version
@@ -164,13 +206,13 @@ metadata:
 Body of the skill. This is what pi loads when you pass the path.
 ```
 
-- `name` — required. Lowercase `a-z0-9-`, 1–64 chars, no leading/trailing or
+- `name`: required. Lowercase `a-z0-9-`, 1-64 chars, no leading/trailing or
   consecutive hyphens.
-- `description` — required (max 1024 chars). pi will not load a skill without one.
-- `metadata.keywords`, `metadata.category`, `metadata.aliases` — optional.
+- `description`: required (max 1024 chars). pi will not load a skill without one.
+- `metadata.keywords`, `metadata.category`, `metadata.aliases`: optional.
   Unknown keys are ignored.
 
-`skills/example/SKILL.md` is a copy-pasteable template — start from it.
+`skills/example/SKILL.md` is a copy-pasteable template; start from it.
 
 When you are done, validate everything on disk:
 
@@ -189,12 +231,12 @@ OK    example (example)
 
 `skpp` locates `skills/` by this priority:
 
-1. **`SKPP_SKILLS_DIR` env var** — wins if set and the directory exists. This
+1. **`SKPP_SKILLS_DIR` env var**: wins if set and the directory exists. This
    is the override `go install` users set (see Install).
-2. **Sibling of the binary** — `os.Executable()` plus `EvalSymlinks()` resolves
+2. **Sibling of the binary**: `os.Executable()` plus `EvalSymlinks()` resolves
    the real binary path and looks for `skills/` next to it. This is the rule a
    `./install.sh` symlink install relies on; a copy would break it silently.
-3. **Walk up from the current directory** — useful during development
+3. **Walk up from the current directory**: useful during development
    (`go run .` / running `./skpp` from a checkout).
 4. **Else: fail with a one-line fix** telling you how to set `SKPP_SKILLS_DIR`.
 
