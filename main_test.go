@@ -1533,6 +1533,24 @@ func TestRunExclusivityCheckAndList(t *testing.T) {
 	}
 }
 
+// check + --path also exits 2 (N1: previously fell through to dispatch and ran
+// --path, silently ignoring `check`. `--path` is now in the check+mode set, so
+// `check --path` is rejected just like check+list/search/all — closing the
+// exclusivity asymmetry the prior `--path`-omitted set left open.)
+func TestRunExclusivityCheckAndPath(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := run([]string{"check", "--path"}, &out, &errOut)
+	if code != 2 {
+		t.Fatalf("run(check --path): code=%d; want 2 (N1: check + --path)", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout=%q; want empty (N1)", out.String())
+	}
+	if !strings.Contains(errOut.String(), "check") || !strings.Contains(errOut.String(), "--path") {
+		t.Errorf("stderr=%q; want a message mentioning check and --path", errOut.String())
+	}
+}
+
 // --- parseArgs: combined short flags + --flag=value (P1.M4.T1.S1, Issue 5) ---
 
 // Combined short BOOL bundles expand into their individual flags.

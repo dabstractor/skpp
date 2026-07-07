@@ -77,7 +77,7 @@ OPTIONS:
   --list, -l         Human-readable catalog (TAG, NAME, DESCRIPTION)
   --search <q>, -s   Substring search over tag / name / description / keywords / aliases / category
   check              Validate every skill on disk (report OK / WARN / ERROR)
-  --path, -p         Print the resolved skills directory
+  --path, -p         Print the resolved skills directory (discovery rule printed to stderr)
   --file, -f         Print the SKILL.md path instead of the directory (modifier)
   --relative         Print paths relative to the skills directory (modifier)
   --no-color         Disable ANSI color even on a TTY (modifier)
@@ -626,10 +626,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 //   - check + tags — `check` ignores tags, so the combo is meaningless
 //   - check + a listing mode — modes are mutually exclusive
 //
-// `check` is NOT in the listing-mode set: check+mode is caught by the family
-// below, and check+path resolves by dispatch order (path wins) — out of scope
-// here. --file/--relative/--no-color are MODIFIERS and never trigger exclusivity
-// (they combine with a single mode, e.g. `--all --file`).
+// `check` is NOT in the listing-mode set: check+mode is caught by the families
+// below (and check+path, too — it used to silently resolve by dispatch order
+// with path winning, which was inconsistent with check+list/check+search/
+// check+all all exiting 2; N1 closed that asymmetry). --file/--relative/
+// --no-color are MODIFIERS and never trigger exclusivity (they combine with a
+// single mode, e.g. `--all --file`).
 func exclusivityError(c config) (bad bool, msg string) {
 	// Issue 6 (decisions.md §D6): any 2+ of the listing modes are mutually
 	// exclusive. Count the active ones; >= 2 is an error. Checked FIRST so a
@@ -652,8 +654,8 @@ func exclusivityError(c config) (bad bool, msg string) {
 	if c.check && hasTags {
 		return true, "skpp: 'check' cannot be combined with tag arguments"
 	}
-	if c.check && (c.list || c.searchMode || c.all) {
-		return true, "skpp: 'check' cannot be combined with --list/--search/--all"
+	if c.check && (c.path || c.list || c.searchMode || c.all) {
+		return true, "skpp: 'check' cannot be combined with --path/--list/--search/--all"
 	}
 	return false, ""
 }
