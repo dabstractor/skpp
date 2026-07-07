@@ -1,18 +1,5 @@
-# Build output
 /skpp
 /dist
-/build
-
-# Test / coverage artifacts
 *.test
 *.out
-
-# Environment files
-.env
-.env.*
-
-# OS files
 .DS_Store
-
-# Tool scratch (pi-subagent run artifacts; regenerated per run)
-.pi-subagents/
