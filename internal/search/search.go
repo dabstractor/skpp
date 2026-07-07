@@ -1,5 +1,5 @@
 // Package search filters a []discover.Skill by a case-insensitive substring
-// query over the six fields PRD §10 enriches for `skpp --search`: the tag, the
+// query over the six fields PRD §10 enriches for `skilldozer --search`: the tag, the
 // frontmatter name, the description, each metadata keyword, each metadata alias,
 // and the metadata category. It is a PURE
 // function over []discover.Skill: no filesystem, no globals, no I/O — main
@@ -16,18 +16,18 @@ package search
 import (
 	"strings"
 
-	"github.com/dabstractor/skpp/internal/discover"
+	"github.com/dabstractor/skilldozer/internal/discover"
 )
 
 // Search returns every skill in skills for which query is a case-insensitive
 // substring of ANY of six fields: RelTag (the tag), Name (frontmatter name),
 // Description, any Keyword, any Alias, or Category (PRD §10: keywords/category/
-// aliases "exist only to enrich skpp --search"). Input order is
+// aliases "exist only to enrich skilldozer --search"). Input order is
 // preserved: discover.Index sorts []Skill by RelTag, and ui.PrintList does NOT
 // re-sort, so the filtered slice is displayed already-sorted.
 //
 // An empty query matches EVERY skill: strings.Contains(hay, "") is always true,
-// so `skpp --search ""` behaves like `skpp --list` (exit 1 only if the store is
+// so `skilldozer --search ""` behaves like `skilldozer --list` (exit 1 only if the store is
 // empty). This is the natural substring semantics; the PRD carves out no special
 // case for an empty query.
 //
@@ -52,7 +52,7 @@ func Search(query string, skills []discover.Skill) []discover.Skill {
 //
 // Field scope is SIX fields: RelTag, Name, Description, each Keyword, each
 // Alias, and Category. PRD §10 states keywords/category/aliases "exist only to
-// enrich skpp --search" — so aliases and category ARE searched (decisions.md
+// enrich skilldozer --search" — so aliases and category ARE searched (decisions.md
 // §D4: §10 wins over §6.1's summary field list). This makes --search consistent
 // with resolve, which resolves by alias (§7.2 step 4). Aliases are matched
 // INDIVIDUALLY (see the Keywords note below) for the same boundary-safety reason.
@@ -77,7 +77,7 @@ func matches(q string, s discover.Skill) bool {
 	}
 	// Aliases (metadata.aliases) — matched INDIVIDUALLY, same boundary-safety
 	// as Keywords: a query spanning two aliases must not match. PRD §10 says
-	// aliases "exist only to enrich skpp --search"; this also makes --search
+	// aliases "exist only to enrich skilldozer --search"; this also makes --search
 	// consistent with resolve, which resolves by alias (§7.2 step 4).
 	for _, a := range s.Aliases {
 		if strings.Contains(strings.ToLower(a), q) {

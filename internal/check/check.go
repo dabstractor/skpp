@@ -23,7 +23,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dabstractor/skpp/internal/discover"
+	"github.com/dabstractor/skilldozer/internal/discover"
 )
 
 // Severity ranks a finding. OK < WARN < ERROR. OK is the implicit value for a

@@ -1,8 +1,8 @@
-// Package skillsdir locates the on-disk skills/ directory for skpp.
+// Package skillsdir locates the on-disk skills/ directory for skilldozer.
 //
 // It implements the PRD §8 priority order:
 //
-//  1. SKPP_SKILLS_DIR env var — if set and an existing dir, use it as-is.
+//  1. SKILLDOZER_SKILLS_DIR env var — if set and an existing dir, use it as-is.
 //  2. Sibling of the running binary (symlink-aware via os.Executable + EvalSymlinks).
 //  3. Walk up from the current working directory.
 //
@@ -21,11 +21,11 @@ import (
 )
 
 // Source identifies which §8 rule located the skills directory. It is reported
-// by `skpp --path` so users can tell how the dir was found.
+// by `skilldozer --path` so users can tell how the dir was found.
 type Source int
 
 const (
-	// SourceEnv means SKPP_SKILLS_DIR was set and pointed at an existing dir.
+	// SourceEnv means SKILLDOZER_SKILLS_DIR was set and pointed at an existing dir.
 	SourceEnv Source = iota
 	// SourceSibling means the skills dir was found next to the running binary.
 	SourceSibling
@@ -34,11 +34,11 @@ const (
 )
 
 // String returns a human-readable label for the rule that won, used by
-// `skpp --path` reporting. Satisfies fmt.Stringer.
+// `skilldozer --path` reporting. Satisfies fmt.Stringer.
 func (s Source) String() string {
 	switch s {
 	case SourceEnv:
-		return "SKPP_SKILLS_DIR"
+		return "SKILLDOZER_SKILLS_DIR"
 	case SourceSibling:
 		return "sibling of binary"
 	case SourceWalkUp:
@@ -51,11 +51,11 @@ func (s Source) String() string {
 // envVar is the environment variable consulted by rule 1. It is a package
 // constant (not a parameter): the contract is "mock/replace nothing" — tests
 // drive it via t.Setenv / os.Unsetenv, never via injection.
-const envVar = "SKPP_SKILLS_DIR"
+const envVar = "SKILLDOZER_SKILLS_DIR"
 
 // findEnv implements PRD §8 rule 1.
 //
-// It reads SKPP_SKILLS_DIR; if the value names an existing directory it returns
+// It reads SKILLDOZER_SKILLS_DIR; if the value names an existing directory it returns
 // that directory as an absolute path with src=SourceEnv and found=true. The env
 // path is NOT passed through filepath.EvalSymlinks: the user points exactly
 // where they want (a symlink is preserved verbatim, only made absolute/clean
@@ -80,7 +80,7 @@ func findEnv() (dir string, src Source, found bool) {
 
 // findSibling implements PRD §8 rule 2 — locate <repoDir>/skills next to the
 // running binary, symlink-aware. This is the rule that makes a symlink install
-// work: ~/.local/bin/skpp -> ~/projects/skpp/skpp resolves back to the repo.
+// work: ~/.local/bin/skilldozer -> ~/projects/skilldozer/skilldozer resolves back to the repo.
 //
 // It is a thin entry that asks the OS for the running binary (os.Executable)
 // and delegates the symlink/dir logic to resolveSiblingFromExe. os.Executable
@@ -218,11 +218,11 @@ func findWalkUp() (dir string, src Source, found bool) {
 // ErrNotFound is returned by Find when all three §8 rules miss. Its message is
 // the user-facing one-line fix (PRD §8.4 / §6.4): main prints it to stderr and
 // exits 1. Print it verbatim (err.Error()); do not wrap or prefix it.
-var ErrNotFound = errors.New("could not locate the skills directory: set $SKPP_SKILLS_DIR, cd into the skpp repo, or reinstall skpp")
+var ErrNotFound = errors.New("could not locate the skills directory: set $SKILLDOZER_SKILLS_DIR, cd into the skilldozer repo, or reinstall skilldozer")
 
 // Find locates the skills directory per PRD §8 priority order:
 //
-//  1. SKPP_SKILLS_DIR env var (rule 1, findEnv).
+//  1. SKILLDOZER_SKILLS_DIR env var (rule 1, findEnv).
 //  2. Sibling of the running binary, symlink-aware (rule 2, findSibling).
 //  3. Walk up from cwd (rule 3, findWalkUp).
 //

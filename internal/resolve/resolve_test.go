@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/dabstractor/skpp/internal/discover"
+	"github.com/dabstractor/skilldozer/internal/discover"
 )
 
 // exampleSkills mirrors the PRD §7.2 example setup EXACTLY: a top-level skill

@@ -1,4 +1,4 @@
-module github.com/dabstractor/skpp
+module github.com/dabstractor/skilldozer
 
 go 1.25
 

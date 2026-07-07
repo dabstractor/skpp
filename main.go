@@ -1,4 +1,4 @@
-// Command skpp resolves skill tags to on-disk skill directory paths.
+// Command skilldozer resolves skill tags to on-disk skill directory paths.
 //
 // main.go is the entrypoint: it parses argv, applies PRD §6 precedence
 // (--version/--help win over everything), and dispatches to the matching mode.
@@ -19,18 +19,18 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dabstractor/skpp/internal/check"
-	"github.com/dabstractor/skpp/internal/discover"
-	"github.com/dabstractor/skpp/internal/resolve"
-	"github.com/dabstractor/skpp/internal/search"
-	"github.com/dabstractor/skpp/internal/skillsdir"
-	"github.com/dabstractor/skpp/internal/ui"
+	"github.com/dabstractor/skilldozer/internal/check"
+	"github.com/dabstractor/skilldozer/internal/discover"
+	"github.com/dabstractor/skilldozer/internal/resolve"
+	"github.com/dabstractor/skilldozer/internal/search"
+	"github.com/dabstractor/skilldozer/internal/skillsdir"
+	"github.com/dabstractor/skilldozer/internal/ui"
 )
 
-// version is the skpp version string, printed by `skpp --version`. It is
+// version is the skilldozer version string, printed by `skilldozer --version`. It is
 // overridden at BUILD time via ldflags (PRD §12.1 build command):
 //
-//	go build -ldflags "-X main.version=$(git describe --tags --always 2>/dev/null || echo dev)" -o skpp .
+//	go build -ldflags "-X main.version=$(git describe --tags --always 2>/dev/null || echo dev)" -o skilldozer .
 //
 // The default "dev" is used by `go run` and plain `go build` (no ldflags).
 //
@@ -42,34 +42,34 @@ var version = "dev"
 
 // usageText is the full --help / no-args usage block (PRD §6.1, §6.3). It mirrors
 // the STRUCTURE of mcpeepants get-server-config.sh (USAGE / EXAMPLES / OPTIONS,
-// aligned columns) but lists the full skpp §6 flag matrix and the canonical
-// pi --skill "$(skpp <tag>)" one-liner. It is emitted PLAIN (no ANSI):
-// `skpp --help | grep` must work, §13 does not assert on help color, and tests
+// aligned columns) but lists the full skilldozer §6 flag matrix and the canonical
+// pi --skill "$(skilldozer <tag>)" one-liner. It is emitted PLAIN (no ANSI):
+// `skilldozer --help | grep` must work, §13 does not assert on help color, and tests
 // use non-TTY buffers. The SAME text is printed to stdout for --help (exit 0) and
 // to stderr for the no-args default (exit 1) — only the destination differs.
-const usageText = `skpp — skill path printer
+const usageText = `skilldozer — skill path printer
 
 Resolve skill tags to on-disk skill directory paths (manifest-free).
 
 USAGE:
-  skpp <tag> [<tag>...]
-  skpp --all
-  skpp --list
-  skpp --search <query>
-  skpp check
-  skpp --path
-  skpp --help
-  skpp --version
+  skilldozer <tag> [<tag>...]
+  skilldozer --all
+  skilldozer --list
+  skilldozer --search <query>
+  skilldozer check
+  skilldozer --path
+  skilldozer --help
+  skilldozer --version
 
 EXAMPLES:
-  pi --skill "$(skpp example)"
-  pi --skill "$(skpp writing/reddit)"
-  skpp example reddit          # one absolute path per line, input order
-  skpp -f example              # print the SKILL.md path
-  skpp --relative --all        # every skill path, relative to the skills dir
-  skpp --list                  # human-readable catalog
-  skpp --search reddit         # substring search over tag/name/description/keywords/aliases/category
-  skpp check                   # validate every skill on disk
+  pi --skill "$(skilldozer example)"
+  pi --skill "$(skilldozer writing/reddit)"
+  skilldozer example reddit          # one absolute path per line, input order
+  skilldozer -f example              # print the SKILL.md path
+  skilldozer --relative --all        # every skill path, relative to the skills dir
+  skilldozer --list                  # human-readable catalog
+  skilldozer --search reddit         # substring search over tag/name/description/keywords/aliases/category
+  skilldozer check                   # validate every skill on disk
 
 OPTIONS:
   <tag> [<tag>...]   Resolve tags to skill directory paths (one absolute path per line)
@@ -82,7 +82,7 @@ OPTIONS:
   --relative         Print paths relative to the skills directory (modifier)
   --no-color         Disable ANSI color even on a TTY (modifier)
   --help, -h         Show this help message
-  --version, -v      Print the skpp version
+  --version, -v      Print the skilldozer version
 
 Exit codes: 0 success/help/version | 1 unresolved/no skills/unresolvable dir | 2 unknown flag / mutually-exclusive modes
 `
@@ -120,7 +120,7 @@ func main() {
 // (P1.M5.T11.S1) completes the matrix by adding help and unknownFlag, the final
 // two fields needed for the §6.3 precedence + the §6-header unknown-flag rule.
 type config struct {
-	version     bool     // --version / -v : print "skpp <version>" and exit 0
+	version     bool     // --version / -v : print "skilldozer <version>" and exit 0
 	help        bool     // --help / -h    : print usage to STDOUT and exit 0 (§6.1, §6.3 "help wins" tiebreak)
 	path        bool     // --path / -p    : print resolved skills dir and exit 0/1
 	list        bool     // --list / -l    : print the human-readable catalog table (§6.1)
@@ -130,8 +130,8 @@ type config struct {
 	noColor     bool     // --no-color     : disable ANSI color even on a TTY (§6.2)
 	searchMode  bool     // --search <q>/-s : substring search over tag/name/description/keywords/aliases/category (§10)
 	searchQ     string   // the --search query value (consumed from the token after --search/-s)
-	check       bool     // `skpp check` subcommand: validate every skill in the store (§9)
-	tags        []string // positional <tag> args (PRD §6.1 `skpp <tag> [<tag>...]`); resolved in run
+	check       bool     // `skilldozer check` subcommand: validate every skill in the store (§9)
+	tags        []string // positional <tag> args (PRD §6.1 `skilldozer <tag> [<tag>...]`); resolved in run
 	unknownFlag string   // first unknown dashed token, "" if none (§6 header → exit 2)
 }
 
@@ -232,9 +232,9 @@ func parseArgs(args []string) config {
 				i++
 			}
 		case "check":
-			// `skpp check` subcommand (PRD §9). `check` is a RESERVED positional
+			// `skilldozer check` subcommand (PRD §9). `check` is a RESERVED positional
 			// token: it selects validation mode and is NOT captured as a tag. A
-			// skill literally tagged `check` cannot be resolved via `skpp check`
+			// skill literally tagged `check` cannot be resolved via `skilldozer check`
 			// (subcommand names are reserved, as in any CLI). Captured ANYWHERE in
 			// argv (so `--no-color check` still selects check); run()'s
 			// exclusivity check rejects check+tags / check+mode with exit 2. A
@@ -242,7 +242,7 @@ func parseArgs(args []string) config {
 			// the EXACT token "check".
 			c.check = true
 		default:
-			// Positional <tag> (PRD §6.1 `skpp <tag> [<tag>...]`): a token that
+			// Positional <tag> (PRD §6.1 `skilldozer <tag> [<tag>...]`): a token that
 			// does NOT start with '-' is a tag, captured here and resolved in run.
 			// A dashed token NOT in the known set is an unknown flag (PRD §6 header:
 			// exit 2): capture the FIRST offender for run() to report. Do NOT collect
@@ -377,15 +377,15 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 	// 2) --version next (PRD §6.3: precedes everything except --help).
 	if c.version {
-		fmt.Fprintf(stdout, "skpp %s\n", version)
+		fmt.Fprintf(stdout, "skilldozer %s\n", version)
 		return 0
 	}
 
 	// 3) Unknown dashed flag → exit 2 (PRD §6 header). stdout stays EMPTY (§6.4
-	//    discipline: `pi --skill "$(skpp --bogus)"` must fail loudly, not pass a
+	//    discipline: `pi --skill "$(skilldozer --bogus)"` must fail loudly, not pass a
 	//    garbage path). Reported AFTER --help/--version so those still win.
 	if c.unknownFlag != "" {
-		fmt.Fprintf(stderr, "skpp: unknown flag '%s'\n", c.unknownFlag)
+		fmt.Fprintf(stderr, "skilldozer: unknown flag '%s'\n", c.unknownFlag)
 		return 2
 	}
 
@@ -414,18 +414,18 @@ func run(args []string, stdout, stderr io.Writer) int {
 			return 1
 		}
 		// Byte-exact: ONLY the dir + newline on stdout. The §13 acceptance gate
-		// `test "$(./skpp --path)" = "$PWD/skills"` depends on this — $() captures
+		// `test "$(./skilldozer --path)" = "$PWD/skills"` depends on this — $() captures
 		// stdout only, so the stderr label below does NOT break it.
 		fmt.Fprintln(stdout, dir)
 		// Issue 1 (QA): report which §8 discovery rule won, to stderr. A typo'd
-		// SKPP_SKILLS_DIR silently falls through to sibling/walk-up; this label
+		// SKILLDOZER_SKILLS_DIR silently falls through to sibling/walk-up; this label
 		// makes that visible without polluting stdout. Labels from Source.String().
 		fmt.Fprintf(stderr, "(found via %s)\n", src)
 		return 0
 	}
 
 	if c.list {
-		// PRD §6.1 `skpp --list`: resolve the store, build the index, render the
+		// PRD §6.1 `skilldozer --list`: resolve the store, build the index, render the
 		// table. This is the FIRST place the Find() -> discover.Index() data flow
 		// is wired end-to-end (M2.T6). Exit 1 on any failure path.
 		dir, _, err := skillsdir.Find()
@@ -453,7 +453,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 
-	// --search mode: `skpp --search <q>` / `-s <q>` (PRD §10). Filters the index to
+	// --search mode: `skilldozer --search <q>` / `-s <q>` (PRD §10). Filters the index to
 	// skills where <q> is a case-insensitive substring of the tag, frontmatter name,
 	// description, any metadata keyword, any metadata alias, or the metadata category
 	// (internal/search), then renders the SAME
@@ -485,11 +485,11 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 
-	// `skpp check` subcommand (PRD §9). Validates every skill in the store and
+	// `skilldozer check` subcommand (PRD §9). Validates every skill in the store and
 	// prints a report: one line per problem (prefixed ERROR/WARN) plus one OK line
 	// per clean skill, ending with a "N skills, M errors, K warnings" summary. Exit
 	// 0 if there are no ERRORs, 1 if there are any (WARNs never change the exit
-	// code, so `if skpp check; then …` works as a gate). An empty store is clean
+	// code, so `if skilldozer check; then …` works as a gate). An empty store is clean
 	// (0 skills, 0 errors, 0 warnings) -> exit 0 (check is validation: no skills ==
 	// nothing wrong, unlike --list which exits 1 on empty).
 	//
@@ -561,17 +561,17 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 
-	// Tag-resolution mode: `skpp <tag> [<tag>...]` (PRD §6.1). Resolves each tag to
+	// Tag-resolution mode: `skilldozer <tag> [<tag>...]` (PRD §6.1). Resolves each tag to
 	// its skill path and prints one path per line, in input order.
 	//
 	// ATOMICITY (PRD §6.4 — the critical-for-$(...) contract): resolve EVERY tag
 	// first, buffering the resulting paths; if ANY tag fails (unknown/ambiguous),
 	// print one error line per problem tag to stderr, print NOTHING to stdout, and
 	// exit 1. The buffered paths are flushed ONLY when the whole invocation is
-	// known-good. This makes `pi --skill "$(skpp bad)"` fail loudly (empty $(),
+	// known-good. This makes `pi --skill "$(skilldozer bad)"` fail loudly (empty $(),
 	// exit 1) instead of passing a partial or garbage path. Each error is printed
 	// verbatim from resolve's typed errors — UnknownError names the tag,
-	// AmbiguousError lists the candidate full tags (no "skpp:" prefix, matching the
+	// AmbiguousError lists the candidate full tags (no "skilldozer:" prefix, matching the
 	// skillsdir.ErrNotFound convention used by --path/--list). The default output is
 	// the skill DIRECTORY path; --file swaps to the SKILL.md path and --relative
 	// makes it relative to the skills dir (applied by skillPath, PRD §6.2).
@@ -610,7 +610,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 	// No recognized mode → usage to STDERR, exit 1 (PRD §6.3: parity with
 	// get-server-config.sh). Covers both truly-no-args and modifiers-only (e.g.
-	// `skpp --no-color`): if skpp was asked to DO nothing, show usage. stdout stays
+	// `skilldozer --no-color`): if skilldozer was asked to DO nothing, show usage. stdout stays
 	// empty so $(...) never sees garbage.
 	fmt.Fprint(stderr, usage())
 	return 1
@@ -645,17 +645,17 @@ func exclusivityError(c config) (bad bool, msg string) {
 		}
 	}
 	if n >= 2 {
-		return true, "skpp: listing modes --path/--list/--search/--all are mutually exclusive"
+		return true, "skilldozer: listing modes --path/--list/--search/--all are mutually exclusive"
 	}
 	hasTags := len(c.tags) > 0
 	if hasTags && (c.list || c.searchMode || c.all) {
-		return true, "skpp: tags cannot be combined with --list/--search/--all"
+		return true, "skilldozer: tags cannot be combined with --list/--search/--all"
 	}
 	if c.check && hasTags {
-		return true, "skpp: 'check' cannot be combined with tag arguments"
+		return true, "skilldozer: 'check' cannot be combined with tag arguments"
 	}
 	if c.check && (c.path || c.list || c.searchMode || c.all) {
-		return true, "skpp: 'check' cannot be combined with --path/--list/--search/--all"
+		return true, "skilldozer: 'check' cannot be combined with --path/--list/--search/--all"
 	}
 	return false, ""
 }
@@ -678,7 +678,7 @@ func exclusivityError(c config) (bad bool, msg string) {
 // s.SourceFile are set absolute by discover.Index; skillsDir is absolute from
 // skillsdir.Find), and s.Dir is always UNDER skillsDir (it was discovered by
 // walking it), so a clean relative path always exists. The err guard is defensive
-// only: on a (theoretical) Rel failure skpp falls back to the absolute path, which
+// only: on a (theoretical) Rel failure skilldozer falls back to the absolute path, which
 // is still a correct, usable answer rather than crashing.
 func skillPath(s discover.Skill, skillsDir string, c config) string {
 	p := s.Dir // default: absolute skill directory (PRD §6.1/§6.2)

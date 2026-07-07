@@ -6,7 +6,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/dabstractor/skpp/internal/discover"
+	"github.com/dabstractor/skilldozer/internal/discover"
 )
 
 // mk builds one discover.Skill for table tests. fm controls HasFM (and thus the
@@ -125,7 +125,7 @@ func TestPrintListTrimsFoldedScalarNewline(t *testing.T) {
 
 func TestPrintListWrapsLongDescription(t *testing.T) {
 	var buf bytes.Buffer
-	long := "Reference example skill for skpp. Demonstrates the required frontmatter and how skpp resolves a tag to an absolute path. Safe to delete once you add real skills."
+	long := "Reference example skill for skilldozer. Demonstrates the required frontmatter and how skilldozer resolves a tag to an absolute path. Safe to delete once you add real skills."
 	PrintList(&buf, []discover.Skill{mk("example", "example", long, true)}, false)
 	lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
 	// header + >=2 wrapped data lines.

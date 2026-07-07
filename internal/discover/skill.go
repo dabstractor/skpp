@@ -1,6 +1,6 @@
 // skill.go defines the Skill type and the metadata-extraction constructor that
 // turns parsed frontmatter (S1's Frontmatter) into the typed records the rest of
-// skpp consumes (PRD §7.1, §7.3). This is the P1.M2.T4.S2 deliverable: discover.go
+// skilldozer consumes (PRD §7.1, §7.3). This is the P1.M2.T4.S2 deliverable: discover.go
 // (S1) owns Frontmatter + ParseFrontmatter; skill.go (S2) owns Skill + the
 // []any->[]string normalization; the Index() walk that ties them together is T5.
 package discover

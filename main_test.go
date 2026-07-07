@@ -19,18 +19,18 @@ func withTerminal(t *testing.T, isTTY bool) {
 	t.Cleanup(func() { isTerminal = prev })
 }
 
-// unsetSkillsEnv removes SKPP_SKILLS_DIR for the test and restores it on cleanup.
+// unsetSkillsEnv removes SKILLDOZER_SKILLS_DIR for the test and restores it on cleanup.
 // (Mirrors internal/skillsdir/skillsdir_test.go's unsetEnvVar helper.) Forbids
 // t.Parallel via t.Setenv.
 func unsetSkillsEnv(t *testing.T) {
 	t.Helper()
-	t.Setenv("SKPP_SKILLS_DIR", "")
+	t.Setenv("SKILLDOZER_SKILLS_DIR", "")
 }
 
 // writeSkillTree builds a temp skills/ tree from a map[relTag]SKILL.md-content
 // and returns its root. relTag uses '/' separators (cross-platform via FromSlash).
 // A "" key writes SKILL.md directly in the root. Used by the --list tests to give
-// skillsdir.Find() (via SKPP_SKILLS_DIR) a real store to discover.
+// skillsdir.Find() (via SKILLDOZER_SKILLS_DIR) a real store to discover.
 func writeSkillTree(t *testing.T, layout map[string]string) string {
 	t.Helper()
 	root := t.TempDir()
@@ -133,13 +133,13 @@ func TestParseArgsNoColor(t *testing.T) {
 
 // --- run: --version / -v ---
 
-func TestRunVersionPrintsSkppVersion(t *testing.T) {
+func TestRunVersionPrintsSkilldozerVersion(t *testing.T) {
 	var out, errOut bytes.Buffer
 	code := run([]string{"--version"}, &out, &errOut)
 	if code != 0 {
 		t.Fatalf("run(--version): code=%d; want 0", code)
 	}
-	want := "skpp " + version + "\n" // version == "dev" under `go test` (no ldflags)
+	want := "skilldozer " + version + "\n" // version == "dev" under `go test` (no ldflags)
 	if got := out.String(); got != want {
 		t.Errorf("run(--version) stdout=%q; want %q", got, want)
 	}
@@ -154,8 +154,8 @@ func TestRunVersionShortFlag(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("run(-v): code=%d; want 0", code)
 	}
-	if !strings.HasPrefix(out.String(), "skpp ") {
-		t.Errorf("run(-v) stdout=%q; want 'skpp <version>\\n'", out.String())
+	if !strings.HasPrefix(out.String(), "skilldozer ") {
+		t.Errorf("run(-v) stdout=%q; want 'skilldozer <version>\\n'", out.String())
 	}
 	if !strings.HasSuffix(out.String(), "\n") {
 		t.Errorf("run(-v) stdout=%q; want trailing newline", out.String())
@@ -164,11 +164,11 @@ func TestRunVersionShortFlag(t *testing.T) {
 
 // --- run: --path / -p ---
 
-// --path success: SKPP_SKILLS_DIR set to an existing dir -> rule 1 wins, Find()
+// --path success: SKILLDOZER_SKILLS_DIR set to an existing dir -> rule 1 wins, Find()
 // returns that dir, printed byte-exact to stdout, exit 0.
 func TestRunPathSuccess(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("SKPP_SKILLS_DIR", dir) // rule 1 wins deterministically
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir) // rule 1 wins deterministically
 	var out, errOut bytes.Buffer
 	code := run([]string{"--path"}, &out, &errOut)
 	if code != 0 {
@@ -179,14 +179,14 @@ func TestRunPathSuccess(t *testing.T) {
 	if got := out.String(); got != want {
 		t.Errorf("run(--path) stdout=%q; want %q (byte-exact dir + newline)", got, want)
 	}
-	if got, want := errOut.String(), "(found via SKPP_SKILLS_DIR)\n"; got != want {
+	if got, want := errOut.String(), "(found via SKILLDOZER_SKILLS_DIR)\n"; got != want {
 		t.Errorf("run(--path) success stderr=%q; want %q (Issue 1 source label)", got, want)
 	}
 }
 
 func TestRunPathShortFlag(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"-p"}, &out, &errOut)
 	if code != 0 {
@@ -195,18 +195,18 @@ func TestRunPathShortFlag(t *testing.T) {
 	if got := out.String(); got != filepath.Clean(dir)+"\n" {
 		t.Errorf("run(-p) stdout=%q; want %q", got, filepath.Clean(dir)+"\n")
 	}
-	if got, want := errOut.String(), "(found via SKPP_SKILLS_DIR)\n"; got != want {
+	if got, want := errOut.String(), "(found via SKILLDOZER_SKILLS_DIR)\n"; got != want {
 		t.Errorf("run(-p) stderr=%q; want %q (Issue 1 source label)", got, want)
 	}
 }
 
 // Issue 1 (QA): --path must report which §8 rule won to stderr, while stdout
-// stays byte-exact so the §13 `test "$(./skpp --path)" = "$PWD/skills"` gate
+// stays byte-exact so the §13 `test "$(./skilldozer --path)" = "$PWD/skills"` gate
 // still passes. The env case is deterministic; sibling/walk-up are covered by
 // skillsdir.TestSourceString.
 func TestRunPathReportsSourceLabel(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("SKPP_SKILLS_DIR", dir) // rule 1 wins -> SourceEnv
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir) // rule 1 wins -> SourceEnv
 	var out, errOut bytes.Buffer
 	if code := run([]string{"--path"}, &out, &errOut); code != 0 {
 		t.Fatalf("run(--path): code=%d; want 0", code)
@@ -216,15 +216,15 @@ func TestRunPathReportsSourceLabel(t *testing.T) {
 		t.Errorf("--path stdout=%q; want %q", got, want)
 	}
 	// stderr: the SourceEnv label, exactly, nothing else.
-	if got, want := errOut.String(), "(found via SKPP_SKILLS_DIR)\n"; got != want {
+	if got, want := errOut.String(), "(found via SKILLDOZER_SKILLS_DIR)\n"; got != want {
 		t.Errorf("--path stderr=%q; want %q", got, want)
 	}
 }
 
 // --path failure: env unset + cwd in an empty temp tree -> all three §8 rules
 // miss -> Find() returns ErrNotFound. Assert: exit 1, stdout EMPTY, stderr has
-// the one-line fix (SKPP_SKILLS_DIR / cd / reinstall). Empty stdout is the §6.4
-// contract that makes `pi --skill "$(skpp bad)"` fail loudly.
+// the one-line fix (SKILLDOZER_SKILLS_DIR / cd / reinstall). Empty stdout is the §6.4
+// contract that makes `pi --skill "$(skilldozer bad)"` fail loudly.
 func TestRunPathFailureErrNotFound(t *testing.T) {
 	unsetSkillsEnv(t)
 	t.Chdir(t.TempDir()) // empty tree -> rule 3 ascends to / and misses; rule 2 misses in tests
@@ -237,7 +237,7 @@ func TestRunPathFailureErrNotFound(t *testing.T) {
 		t.Errorf("run(--path) failure stdout=%q; want EMPTY (§6.4: print nothing on failure)", out.String())
 	}
 	msg := errOut.String()
-	for _, want := range []string{"SKPP_SKILLS_DIR", "cd", "reinstall"} {
+	for _, want := range []string{"SKILLDOZER_SKILLS_DIR", "cd", "reinstall"} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("run(--path) failure stderr=%q; missing substring %q", msg, want)
 		}
@@ -256,7 +256,7 @@ func TestRunVersionPrecedenceOverPath(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("run(--path --version): code=%d; want 0 (version precedence)", code)
 	}
-	want := "skpp " + version + "\n"
+	want := "skilldozer " + version + "\n"
 	if got := out.String(); got != want {
 		t.Errorf("run(--path --version) stdout=%q; want %q (version, not path)", got, want)
 	}
@@ -295,7 +295,7 @@ func TestRunDefaultUnknownFlag(t *testing.T) {
 	if out.Len() != 0 {
 		t.Errorf("stdout=%q; want EMPTY (§6.4: nothing on stdout on exit-2)", out.String())
 	}
-	want := "skpp: unknown flag '--frobnicate'\n"
+	want := "skilldozer: unknown flag '--frobnicate'\n"
 	if got := errOut.String(); got != want {
 		t.Errorf("stderr=%q; want %q", got, want)
 	}
@@ -309,7 +309,7 @@ func TestRunListSuccess(t *testing.T) {
 	dir := writeSkillTree(t, map[string]string{
 		"example": "---\nname: example\ndescription: A demo skill.\n---\n# body\n",
 	})
-	t.Setenv("SKPP_SKILLS_DIR", dir) // rule 1 wins; Find() returns dir, Index finds the skill
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir) // rule 1 wins; Find() returns dir, Index finds the skill
 	var out, errOut bytes.Buffer
 	code := run([]string{"--list"}, &out, &errOut)
 	if code != 0 {
@@ -334,7 +334,7 @@ func TestRunListShortFlag(t *testing.T) {
 	dir := writeSkillTree(t, map[string]string{
 		"example": "---\nname: example\ndescription: d\n---\nx\n",
 	})
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"-l"}, &out, &errOut)
 	if code != 0 {
@@ -346,10 +346,10 @@ func TestRunListShortFlag(t *testing.T) {
 }
 
 // --list with NO skills (empty store) -> PRD §6.1 exit 1, stdout empty, a message
-// to stderr. SKPP_SKILLS_DIR pointing at an existing-but-empty dir: rule 1 wins
+// to stderr. SKILLDOZER_SKILLS_DIR pointing at an existing-but-empty dir: rule 1 wins
 // (it needs only an existing dir), Index returns [], len==0 -> exit 1.
 func TestRunListNoSkillsExit1(t *testing.T) {
-	t.Setenv("SKPP_SKILLS_DIR", t.TempDir()) // exists, no SKILL.md -> empty catalog
+	t.Setenv("SKILLDOZER_SKILLS_DIR", t.TempDir()) // exists, no SKILL.md -> empty catalog
 	var out, errOut bytes.Buffer
 	code := run([]string{"--list"}, &out, &errOut)
 	if code != 1 {
@@ -376,7 +376,7 @@ func TestRunListSkillsDirUnresolvableExit1(t *testing.T) {
 	if out.Len() != 0 {
 		t.Errorf("run(--list) unresolvable stdout=%q; want empty", out.String())
 	}
-	if !strings.Contains(errOut.String(), "SKPP_SKILLS_DIR") {
+	if !strings.Contains(errOut.String(), "SKILLDOZER_SKILLS_DIR") {
 		t.Errorf("run(--list) unresolvable stderr=%q; want the one-line fix", errOut.String())
 	}
 }
@@ -388,7 +388,7 @@ func TestRunListNoColorFlagSuppressesANSI(t *testing.T) {
 	dir := writeSkillTree(t, map[string]string{
 		"example": "---\nname: example\ndescription: d\n---\nx\n",
 	})
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	withTerminal(t, true) // pretend stdout is a TTY
 	var out, errOut bytes.Buffer
 	code := run([]string{"--list", "--no-color"}, &out, &errOut)
@@ -406,7 +406,7 @@ func TestRunListColorWhenTTY(t *testing.T) {
 	dir := writeSkillTree(t, map[string]string{
 		"example": "---\nname: example\ndescription: d\n---\nx\n",
 	})
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	withTerminal(t, true)
 	var out, errOut bytes.Buffer
 	code := run([]string{"--list"}, &out, &errOut)
@@ -452,7 +452,7 @@ func TestParseArgsTagsAndFlagsInterleave(t *testing.T) {
 // --- run: <tag> resolution (P1.M3.T8.S1) ---
 
 // sampleStore builds a store with a top-level `example` and a nested
-// `writing/reddit` skill, returning the skills dir (set via SKPP_SKILLS_DIR rule 1).
+// `writing/reddit` skill, returning the skills dir (set via SKILLDOZER_SKILLS_DIR rule 1).
 func sampleStore(t *testing.T) string {
 	t.Helper()
 	return writeSkillTree(t, map[string]string{
@@ -465,7 +465,7 @@ func sampleStore(t *testing.T) string {
 // stderr. The default output is the dir, not SKILL.md (--file is P1.M3.T8.S2).
 func TestRunTagSingleResolvesToDir(t *testing.T) {
 	dir := sampleStore(t)
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"example"}, &out, &errOut)
 	if code != 0 {
@@ -484,7 +484,7 @@ func TestRunTagSingleResolvesToDir(t *testing.T) {
 // resolves by basename to writing/reddit; `example` by canonical tag.
 func TestRunTagMultipleInInputOrder(t *testing.T) {
 	dir := sampleStore(t)
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"reddit", "example"}, &out, &errOut)
 	if code != 0 {
@@ -506,7 +506,7 @@ func TestRunTagMultipleInInputOrder(t *testing.T) {
 // stderr line per problem tag, exit 1. The resolvable tag must NOT leak to stdout.
 func TestRunTagAtomicityUnknownPrintsNothing(t *testing.T) {
 	dir := sampleStore(t)
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"example", "nope"}, &out, &errOut)
 	if code != 1 {
@@ -523,7 +523,7 @@ func TestRunTagAtomicityUnknownPrintsNothing(t *testing.T) {
 // All tags fail -> one stderr line per problem tag, nothing on stdout, exit 1.
 func TestRunTagAllFailMultipleErrorLines(t *testing.T) {
 	dir := sampleStore(t)
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"nope1", "nope2"}, &out, &errOut)
 	if code != 1 {
@@ -541,7 +541,7 @@ func TestRunTagAllFailMultipleErrorLines(t *testing.T) {
 // A tag repeated in argv resolves each time; output repeats. Not an error.
 func TestRunTagDuplicateArgResolvesTwice(t *testing.T) {
 	dir := sampleStore(t)
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"example", "example"}, &out, &errOut)
 	if code != 0 {
@@ -560,7 +560,7 @@ func TestRunTagAmbiguousListsCandidates(t *testing.T) {
 		"writing/reddit": "---\nname: a\ndescription: d\n---\nx\n",
 		"coding/reddit":  "---\nname: b\ndescription: d\n---\nx\n",
 	})
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"reddit"}, &out, &errOut)
 	if code != 1 {
@@ -590,7 +590,7 @@ func TestRunTagSkillsDirUnresolvable(t *testing.T) {
 	if out.Len() != 0 {
 		t.Errorf("stdout=%q; want EMPTY", out.String())
 	}
-	if !strings.Contains(errOut.String(), "SKPP_SKILLS_DIR") {
+	if !strings.Contains(errOut.String(), "SKILLDOZER_SKILLS_DIR") {
 		t.Errorf("stderr=%q; want the one-line fix", errOut.String())
 	}
 }
@@ -598,7 +598,7 @@ func TestRunTagSkillsDirUnresolvable(t *testing.T) {
 // The resolved path is ABSOLUTE (PRD §6.1 default; --relative is P1.M3.T8.S2).
 func TestRunTagPathIsAbsolute(t *testing.T) {
 	dir := sampleStore(t)
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"example"}, &out, &errOut)
 	if code != 0 {
@@ -612,13 +612,13 @@ func TestRunTagPathIsAbsolute(t *testing.T) {
 // --version precedes tag-resolution mode even when a tag is present (PRD §6.3).
 func TestRunVersionPrecedenceOverTag(t *testing.T) {
 	dir := sampleStore(t)
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"example", "--version"}, &out, &errOut)
 	if code != 0 {
 		t.Fatalf("run(example --version): code=%d; want 0 (version precedence)", code)
 	}
-	if got := out.String(); got != "skpp "+version+"\n" {
+	if got := out.String(); got != "skilldozer "+version+"\n" {
 		t.Errorf("stdout=%q; want the version line (precedence over tag mode)", got)
 	}
 }
@@ -674,10 +674,10 @@ func TestParseArgsModifiersInterleave(t *testing.T) {
 // --- run: <tag> + --file/--relative modifiers (P1.M3.T8.S2) ---
 
 // --file prints the ABSOLUTE SKILL.md path instead of the dir (PRD §6.2). The §13
-// gate `test -f "$(./skpp -f example)"` depends on this printing a real file.
+// gate `test -f "$(./skilldozer -f example)"` depends on this printing a real file.
 func TestRunTagFilePrintsSourceFile(t *testing.T) {
 	dir := sampleStore(t)
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"-f", "example"}, &out, &errOut)
 	if code != 0 {
@@ -696,7 +696,7 @@ func TestRunTagFilePrintsSourceFile(t *testing.T) {
 // uses the OS path separator (filepath.Rel), so compare via FromSlash.
 func TestRunTagRelativePrintsRelativeDir(t *testing.T) {
 	dir := sampleStore(t)
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"--relative", "writing/reddit"}, &out, &errOut)
 	if code != 0 {
@@ -711,7 +711,7 @@ func TestRunTagRelativePrintsRelativeDir(t *testing.T) {
 // --file --relative COMBINE: a SKILL.md path RELATIVE to the skills dir (PRD §6.2).
 func TestRunTagFileRelativeCombine(t *testing.T) {
 	dir := sampleStore(t)
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"-f", "--relative", "writing/reddit"}, &out, &errOut)
 	if code != 0 {
@@ -726,7 +726,7 @@ func TestRunTagFileRelativeCombine(t *testing.T) {
 // Modifiers must NOT break §6.4 atomicity: one bad tag -> NOTHING on stdout, exit 1.
 func TestRunTagFileAtomicity(t *testing.T) {
 	dir := sampleStore(t)
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"-f", "example", "nope"}, &out, &errOut)
 	if code != 1 {
@@ -743,7 +743,7 @@ func TestRunTagFileAtomicity(t *testing.T) {
 // canonical tag (discover.Index already sorts []Skill by RelTag). exit 0.
 func TestRunAllPrintsAllDirsSorted(t *testing.T) {
 	dir := sampleStore(t)
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"--all"}, &out, &errOut)
 	if code != 0 {
@@ -768,7 +768,7 @@ func TestRunAllPrintsAllDirsSorted(t *testing.T) {
 // -a short form behaves identically to --all.
 func TestRunAllShortFlag(t *testing.T) {
 	dir := sampleStore(t)
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"-a"}, &out, &errOut)
 	if code != 0 {
@@ -782,7 +782,7 @@ func TestRunAllShortFlag(t *testing.T) {
 // --all --file: every skill's ABSOLUTE SKILL.md path, sorted by tag.
 func TestRunAllFilePrintsAllSourceFiles(t *testing.T) {
 	dir := sampleStore(t)
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"--all", "--file"}, &out, &errOut)
 	if code != 0 {
@@ -803,7 +803,7 @@ func TestRunAllFilePrintsAllSourceFiles(t *testing.T) {
 // --all --relative: every skill's directory path RELATIVE to the skills dir, sorted.
 func TestRunAllRelativePrintsAllRelative(t *testing.T) {
 	dir := sampleStore(t)
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"--all", "--relative"}, &out, &errOut)
 	if code != 0 {
@@ -825,7 +825,7 @@ func TestRunAllRelativePrintsAllRelative(t *testing.T) {
 // exit 0, UNLIKE --list which exits 1 "if no skills found" — --all is a scripting
 // command where empty output + exit 0 is the useful shape).
 func TestRunAllEmptyStoreExit0(t *testing.T) {
-	t.Setenv("SKPP_SKILLS_DIR", t.TempDir()) // exists, no SKILL.md
+	t.Setenv("SKILLDOZER_SKILLS_DIR", t.TempDir()) // exists, no SKILL.md
 	var out, errOut bytes.Buffer
 	code := run([]string{"--all"}, &out, &errOut)
 	if code != 0 {
@@ -848,7 +848,7 @@ func TestRunAllSkillsDirUnresolvable(t *testing.T) {
 	if out.Len() != 0 {
 		t.Errorf("stdout=%q; want empty", out.String())
 	}
-	if !strings.Contains(errOut.String(), "SKPP_SKILLS_DIR") {
+	if !strings.Contains(errOut.String(), "SKILLDOZER_SKILLS_DIR") {
 		t.Errorf("stderr=%q; want the one-line fix", errOut.String())
 	}
 }
@@ -856,13 +856,13 @@ func TestRunAllSkillsDirUnresolvable(t *testing.T) {
 // --version precedes --all even when both are given (PRD §6.3).
 func TestRunVersionPrecedenceOverAll(t *testing.T) {
 	dir := sampleStore(t)
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"--all", "--version"}, &out, &errOut)
 	if code != 0 {
 		t.Fatalf("run(--all --version): code=%d; want 0 (version precedence)", code)
 	}
-	if got := out.String(); got != "skpp "+version+"\n" {
+	if got := out.String(); got != "skilldozer "+version+"\n" {
 		t.Errorf("stdout=%q; want the version line (precedence over --all)", got)
 	}
 }
@@ -916,7 +916,7 @@ func TestParseArgsSearchConsumesOneValue(t *testing.T) {
 // exit 0, no ANSI (non-TTY buffer). sampleStore has example + writing/reddit.
 func TestRunSearchMatchByTag(t *testing.T) {
 	dir := sampleStore(t)
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"--search", "example"}, &out, &errOut)
 	if code != 0 {
@@ -939,7 +939,7 @@ func TestRunSearchMatchByTag(t *testing.T) {
 
 func TestRunSearchShortFlag(t *testing.T) {
 	dir := sampleStore(t)
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"-s", "reddit"}, &out, &errOut)
 	if code != 0 {
@@ -953,7 +953,7 @@ func TestRunSearchShortFlag(t *testing.T) {
 // --search is case-insensitive (PRD §6.1).
 func TestRunSearchCaseInsensitive(t *testing.T) {
 	dir := sampleStore(t)
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"--search", "REDDIT"}, &out, &errOut)
 	if code != 0 {
@@ -967,7 +967,7 @@ func TestRunSearchCaseInsensitive(t *testing.T) {
 // --search matches by description (example has "A demo skill.").
 func TestRunSearchMatchByDescription(t *testing.T) {
 	dir := sampleStore(t)
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"--search", "demo"}, &out, &errOut)
 	if code != 0 {
@@ -985,7 +985,7 @@ func TestRunSearchMatchByDescription(t *testing.T) {
 // --search matches by frontmatter name (sampleStore reddit has name reddit-poster).
 func TestRunSearchMatchByName(t *testing.T) {
 	dir := sampleStore(t)
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"--search", "poster"}, &out, &errOut)
 	if code != 0 {
@@ -1001,7 +1001,7 @@ func TestRunSearchMatchByKeyword(t *testing.T) {
 	dir := writeSkillTree(t, map[string]string{
 		"example": "---\nname: example\ndescription: d\nmetadata:\n  keywords: [writing, social]\n---\nx\n",
 	})
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"--search", "soc"}, &out, &errOut)
 	if code != 0 {
@@ -1015,7 +1015,7 @@ func TestRunSearchMatchByKeyword(t *testing.T) {
 // --search with NO matches -> exit 1, EMPTY stdout, message to stderr (PRD §6.1).
 func TestRunSearchNoMatchesExit1(t *testing.T) {
 	dir := sampleStore(t)
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"--search", "zzznotfound"}, &out, &errOut)
 	if code != 1 {
@@ -1033,7 +1033,7 @@ func TestRunSearchNoMatchesExit1(t *testing.T) {
 // table — like --list. (PRD carves out no special case for an empty query.)
 func TestRunSearchEmptyQueryMatchesAll(t *testing.T) {
 	dir := sampleStore(t) // 2 skills
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"--search", ""}, &out, &errOut)
 	if code != 0 {
@@ -1048,7 +1048,7 @@ func TestRunSearchEmptyQueryMatchesAll(t *testing.T) {
 // --search respects --no-color: suppresses ANSI even on a TTY.
 func TestRunSearchNoColorSuppressesANSI(t *testing.T) {
 	dir := sampleStore(t)
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	withTerminal(t, true)
 	var out, errOut bytes.Buffer
 	code := run([]string{"--search", "example", "--no-color"}, &out, &errOut)
@@ -1063,7 +1063,7 @@ func TestRunSearchNoColorSuppressesANSI(t *testing.T) {
 // --search emits ANSI when stdout is a TTY and --no-color is absent.
 func TestRunSearchColorWhenTTY(t *testing.T) {
 	dir := sampleStore(t)
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	withTerminal(t, true)
 	var out, errOut bytes.Buffer
 	code := run([]string{"--search", "example"}, &out, &errOut)
@@ -1088,7 +1088,7 @@ func TestRunSearchSkillsDirUnresolvable(t *testing.T) {
 	if out.Len() != 0 {
 		t.Errorf("stdout=%q; want empty", out.String())
 	}
-	if !strings.Contains(errOut.String(), "SKPP_SKILLS_DIR") {
+	if !strings.Contains(errOut.String(), "SKILLDOZER_SKILLS_DIR") {
 		t.Errorf("stderr=%q; want the one-line fix", errOut.String())
 	}
 }
@@ -1096,13 +1096,13 @@ func TestRunSearchSkillsDirUnresolvable(t *testing.T) {
 // --version precedes --search (PRD §6.3).
 func TestRunVersionPrecedenceOverSearch(t *testing.T) {
 	dir := sampleStore(t)
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"--search", "example", "--version"}, &out, &errOut)
 	if code != 0 {
 		t.Fatalf("run(--search example --version): code=%d; want 0 (version precedence)", code)
 	}
-	if got := out.String(); got != "skpp "+version+"\n" {
+	if got := out.String(); got != "skilldozer "+version+"\n" {
 		t.Errorf("stdout=%q; want the version line (precedence over search)", got)
 	}
 }
@@ -1144,13 +1144,13 @@ func TestParseArgsCheckAndTagBothCaptured(t *testing.T) {
 	}
 }
 
-// --- run: `skpp check` (P1.M4.T10.S1) ---
+// --- run: `skilldozer check` (P1.M4.T10.S1) ---
 
 // Clean store -> one OK line per skill + summary, exit 0, no ANSI, empty stderr.
 // sampleStore has example + writing/reddit, both valid.
 func TestRunCheckCleanStore(t *testing.T) {
 	dir := sampleStore(t)
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"check"}, &out, &errOut)
 	if code != 0 {
@@ -1181,7 +1181,7 @@ func TestRunCheckReportsMissingNameExit1(t *testing.T) {
 		"example": "---\nname: example\ndescription: d\n---\nx\n",
 		"bad":     "---\ndescription: no name here\n---\nx\n",
 	})
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"check"}, &out, &errOut)
 	if code != 1 {
@@ -1202,7 +1202,7 @@ func TestRunCheckReportsDuplicateNames(t *testing.T) {
 		"alpha": "---\nname: dup\nmetadata:\n  category: x\n---\nx\n",
 		"beta":  "---\nname: dup\nmetadata:\n  category: x\n---\nx\n",
 	})
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"check"}, &out, &errOut)
 	if code != 1 {
@@ -1225,7 +1225,7 @@ func TestRunCheckWarnOnlyExitsZero(t *testing.T) {
 	dir := writeSkillTree(t, map[string]string{
 		"big": "---\nname: big\ndescription: " + long + "\n---\nx\n",
 	})
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"check"}, &out, &errOut)
 	if code != 0 {
@@ -1243,7 +1243,7 @@ func TestRunCheckWarnOnlyExitsZero(t *testing.T) {
 // Empty store -> 0 skills / 0 errors / 0 warnings, exit 0 (clean, unlike --list).
 func TestRunCheckEmptyStoreExit0(t *testing.T) {
 	dir := writeSkillTree(t, map[string]string{}) // empty skills tree
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"check"}, &out, &errOut)
 	if code != 0 {
@@ -1266,7 +1266,7 @@ func TestRunCheckSkillsDirUnresolvable(t *testing.T) {
 	if out.Len() != 0 {
 		t.Errorf("stdout=%q; want empty (no store -> no report)", out.String())
 	}
-	if !strings.Contains(errOut.String(), "SKPP_SKILLS_DIR") {
+	if !strings.Contains(errOut.String(), "SKILLDOZER_SKILLS_DIR") {
 		t.Errorf("stderr=%q; want the one-line fix", errOut.String())
 	}
 }
@@ -1277,7 +1277,7 @@ func TestRunCheckStatusColumnAligned(t *testing.T) {
 		"good": "---\nname: good\ndescription: d\n---\nx\n",
 		"bad":  "---\ndescription: missing name\n---\nx\n",
 	})
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	run([]string{"check"}, &out, &errOut)
 	for _, line := range strings.Split(strings.TrimRight(out.String(), "\n"), "\n") {
@@ -1298,13 +1298,13 @@ func TestRunCheckStatusColumnAligned(t *testing.T) {
 // --version precedes `check` (PRD §6.3).
 func TestRunVersionPrecedenceOverCheck(t *testing.T) {
 	dir := sampleStore(t)
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"check", "--version"}, &out, &errOut)
 	if code != 0 {
 		t.Fatalf("run(check --version): code=%d; want 0 (version precedence)", code)
 	}
-	if got := out.String(); got != "skpp "+version+"\n" {
+	if got := out.String(); got != "skilldozer "+version+"\n" {
 		t.Errorf("stdout=%q; want the version line (precedence over check)", got)
 	}
 }
@@ -1313,7 +1313,7 @@ func TestRunVersionPrecedenceOverCheck(t *testing.T) {
 // tagged `example` still resolves (the subcommand only steals the literal "check").
 func TestRunTagStillResolvesAlongsideCheck(t *testing.T) {
 	dir := sampleStore(t)
-	t.Setenv("SKPP_SKILLS_DIR", dir)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
 	code := run([]string{"example"}, &out, &errOut) // NOT "check" -> tag resolution
 	if code != 0 {
@@ -1353,7 +1353,7 @@ func TestParseArgsShortUnknownCaptured(t *testing.T) {
 // --- run: --help / -h (P1.M5.T11.S1) ---
 
 // --help → full usage to STDOUT (USAGE/EXAMPLES/OPTIONS + the canonical
-// pi --skill "$(skpp example)" one-liner), exit 0, stderr empty, PLAIN (no ANSI).
+// pi --skill "$(skilldozer example)" one-liner), exit 0, stderr empty, PLAIN (no ANSI).
 func TestRunHelpToStdoutExit0(t *testing.T) {
 	var out, errOut bytes.Buffer
 	code := run([]string{"--help"}, &out, &errOut)
@@ -1361,7 +1361,7 @@ func TestRunHelpToStdoutExit0(t *testing.T) {
 		t.Fatalf("run(--help): code=%d; want 0", code)
 	}
 	got := out.String()
-	for _, want := range []string{"USAGE:", "EXAMPLES:", "OPTIONS:", `pi --skill "$(skpp example)"`} {
+	for _, want := range []string{"USAGE:", "EXAMPLES:", "OPTIONS:", `pi --skill "$(skilldozer example)"`} {
 		if !strings.Contains(got, want) {
 			t.Errorf("run(--help) stdout missing %q:\n%s", want, got)
 		}
@@ -1393,7 +1393,7 @@ func TestRunHelpBeatsVersion(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("run(--help --version): code=%d; want 0", code)
 	}
-	if strings.Contains(out.String(), "skpp "+version) {
+	if strings.Contains(out.String(), "skilldozer "+version) {
 		t.Errorf("help must beat version; got the version line:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "USAGE:") {
@@ -1404,7 +1404,7 @@ func TestRunHelpBeatsVersion(t *testing.T) {
 // --- run: no-args / modifiers-only (P1.M5.T11.S1) ---
 
 // Modifiers-only with no mode (e.g. `--no-color` alone) is the SAME as no-args:
-// skpp was asked to DO nothing → usage to stderr, exit 1, stdout empty.
+// skilldozer was asked to DO nothing → usage to stderr, exit 1, stdout empty.
 func TestRunModifiersOnlyNoMode(t *testing.T) {
 	var out, errOut bytes.Buffer
 	code := run([]string{"--no-color"}, &out, &errOut)
@@ -1430,7 +1430,7 @@ func TestRunUnknownShortFlagExit2(t *testing.T) {
 	if out.Len() != 0 {
 		t.Errorf("stdout=%q; want empty", out.String())
 	}
-	if got := errOut.String(); got != "skpp: unknown flag '-z'\n" {
+	if got := errOut.String(); got != "skilldozer: unknown flag '-z'\n" {
 		t.Errorf("stderr=%q; want the exact unknown-flag line", got)
 	}
 }
@@ -1442,7 +1442,7 @@ func TestRunVersionBeatsUnknownFlag(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("run(--version --bogus): code=%d; want 0 (version precedence)", code)
 	}
-	if got := out.String(); got != "skpp "+version+"\n" {
+	if got := out.String(); got != "skilldozer "+version+"\n" {
 		t.Errorf("stdout=%q; want the version line (version beats unknown flag)", got)
 	}
 	if errOut.Len() != 0 {
@@ -1742,8 +1742,8 @@ func TestRunLongEqualsVersion(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("run(--version=1.2.3): code=%d; want 0", code)
 	}
-	if got := out.String(); got != "skpp "+version+"\n" {
-		t.Errorf("stdout=%q; want 'skpp <version>\\n' (value ignored)", got)
+	if got := out.String(); got != "skilldozer "+version+"\n" {
+		t.Errorf("stdout=%q; want 'skilldozer <version>\\n' (value ignored)", got)
 	}
 	if errOut.Len() != 0 {
 		t.Errorf("stderr=%q; want empty", errOut.String())

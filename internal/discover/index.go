@@ -1,6 +1,6 @@
 // index.go implements discover.Index — the on-disk skills/ walk that ties S1's
 // ParseFrontmatter (discover.go) and S2's BuildSkill (skill.go) into the []Skill
-// the rest of skpp consumes (PRD §7.1). This is the P1.M2.T5.S1 deliverable.
+// the rest of skilldozer consumes (PRD §7.1). This is the P1.M2.T5.S1 deliverable.
 // discover.go (S1) owns the frontmatter model/parser; skill.go (S2) owns the Skill
 // type + metadata extraction; index.go (T5) owns the WalkDir scan, the relTag
 // normalization, the sort, and the parse-error policy. It is the data source for
@@ -28,7 +28,7 @@ import (
 //
 // skillsDir is made absolute first (filepath.Abs), so every Skill.Dir is an
 // absolute path — the contract behind PRD §6.1 ("absolute path") and the §13
-// acceptance gate (`case "$(./skpp example)" in /*)`). On the canonical absolute
+// acceptance gate (`case "$(./skilldozer example)" in /*)`). On the canonical absolute
 // input (from skillsdir.Find) Abs is a no-op Clean.
 //
 // Error policy (the decision S2's PRP assigned to T5; see research/verified_facts.md §8):

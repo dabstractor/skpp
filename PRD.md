@@ -1,32 +1,32 @@
-# PRD — `skpp` (skill path printer)
+# PRD — Skilldozer
 
 > **Status:** Ready for one-shot implementation. This document is the complete specification.
-> **Repo:** `dabstractor/skpp` (already created and cloned at `~/projects/skpp`).
+> **Repo:** `dabstractor/skilldozer` (already created and cloned at `~/projects/skilldozer`).
 > **Scope of THIS task for the implementer:** build the tool, the example skill, docs, install, and completions described below. Do not change the product contract without updating this PRD.
 
 ---
 
 ## 1. Goal
 
-A tiny, fast CLI called **`skpp`** that resolves a human-friendly **skill tag** to the **absolute filesystem path** of a locally-stored [Agent Skill](https://agentskills.io/specification), so it can be loaded into **pi** on demand:
+A tiny, fast CLI called **`skilldozer`** that resolves a human-friendly **skill tag** to the **absolute filesystem path** of a locally-stored [Agent Skill](https://agentskills.io/specification), so it can be loaded into **pi** on demand:
 
 ```bash
-pi --skill "$(skpp my-skill-tag)" --skill "$(skpp my-other-skill-tag)"
+pi --skill "$(skilldozer my-skill-tag)" --skill "$(skilldozer my-other-skill-tag)"
 ```
 
-`skpp` is to **skills** what `mcpeepants` (`get-server-config.sh`) is to **MCP server configs**: a centralized, on-disk catalog you address by tag, surfaced through a one-liner.
+`skilldozer` is to **skills** what `mcpeepants` (`get-server-config.sh`) is to **MCP server configs**: a centralized, on-disk catalog you address by tag, surfaced through a one-liner.
 
 ### Why it exists
 
-pi can load skills from many "official" discovery locations (see §3). The user wants a **single centralized store that is deliberately NOT one of those locations**, loaded **only** via the explicit `--skill <path>` flag. `skpp` is the resolver that turns a tag into that path.
+pi can load skills from many "official" discovery locations (see §3). The user wants a **single centralized store that is deliberately NOT one of those locations**, loaded **only** via the explicit `--skill <path>` flag. `skilldozer` is the resolver that turns a tag into that path.
 
 ---
 
 ## 2. Hard constraints (non-negotiable)
 
 1. **No catalog index — disk-discovered.** There is no `skills.json` / index file enumerating the skill *catalog*; the set of skills is always computed by walking the store on each call, so dropping in a directory with a `SKILL.md` makes it instantly available — no rebuild step, no index/disk drift to debug. This is specifically about the **catalog**. It does **not** prohibit a small **settings** file for things the filesystem cannot express — today, where the store lives (see §8). Catalog data already on disk is never duplicated into a sidecar; settings are not catalog data.
-2. **No auto-discovery by pi.** Skills live in a location pi does **not** scan. They load **only** through `pi --skill "$(skpp <tag>)"`. The store must never be `~/.pi/agent/skills`, `~/.agents/skills`, a project `.pi/skills` or `.agents/skills`, a `node_modules` package, or anything with a `pi.skills` entry in `package.json`.
-3. **`skpp <tag>` prints exactly one absolute path** (to stdout, trailing newline) for a resolved skill — the canonical contract. Unknown tag ⇒ **nothing on stdout**, error to stderr, exit 1.
+2. **No auto-discovery by pi.** Skills live in a location pi does **not** scan. They load **only** through `pi --skill "$(skilldozer <tag>)"`. The store must never be `~/.pi/agent/skills`, `~/.agents/skills`, a project `.pi/skills` or `.agents/skills`, a `node_modules` package, or anything with a `pi.skills` entry in `package.json`.
+3. **`skilldozer <tag>` prints exactly one absolute path** (to stdout, trailing newline) for a resolved skill — the canonical contract. Unknown tag ⇒ **nothing on stdout**, error to stderr, exit 1.
 4. **No development of skills beyond one example.** Ship exactly **one** example skill to prove the pipeline. The repo is a loader, not a skill library.
 5. **One-shot buildable.** An implementer must be able to produce the full deliverable from this document alone, with no further questions.
 
@@ -43,7 +43,7 @@ Verified against pi's own docs/help (`pi --help`, `docs/skills.md`):
 - `description` max 1024 chars. A skill with **no description is not loaded** by pi.
 - pi discovers skills from official locations; we **deliberately use none of them** — we only ever feed pi an explicit `--skill` path.
 
-**Decision:** `skpp` emits the skill **directory** path (not the `SKILL.md` file), because that's the natural unit (includes assets) and `--skill <dir>` is explicitly supported. A `--file` flag is provided for callers who want the `SKILL.md` path instead.
+**Decision:** `skilldozer` emits the skill **directory** path (not the `SKILL.md` file), because that's the natural unit (includes assets) and `--skill <dir>` is explicitly supported. A `--file` flag is provided for callers who want the `SKILL.md` path instead.
 
 ---
 
@@ -70,13 +70,13 @@ Alternatives considered and **rejected**:
 ## 5. Target repository layout
 
 ```
-skpp/
+skilldozer/
 ├── PRD.md                  # THIS file (already exists)
 ├── README.md              # User docs (mirror mcpeepants style)
 ├── LICENSE                # MIT (match mcpeepants conventions)
-├── go.mod                 # module github.com/dabstractor/skpp
+├── go.mod                 # module github.com/dabstractor/skilldozer
 ├── go.sum
-├── .gitignore             # /skpp (built binary), coverage, OS files
+├── .gitignore             # /skilldozer (built binary), coverage, OS files
 ├── main.go                # entrypoint: arg parsing, dispatch
 ├── internal/
 │   ├── discover/
@@ -89,55 +89,55 @@ skpp/
 │       └── ui.go          # --list / --search table formatting (ANSI)
 ├── install.sh             # build + symlink into PATH (mirrors QUICK_INSTALL.sh)
 ├── completions/
-│   ├── skpp.bash
-│   ├── _skpp              # zsh
-│   └── skpp.fish
+│   ├── skilldozer.bash
+│   ├── _skilldozer              # zsh
+│   └── skilldozer.fish
 └── skills/
     └── example/           # the ONE shipped example skill
         └── SKILL.md
 ```
 
-`go.mod` module path: `github.com/dabstractor/skpp`. Minimum Go: the latest two stable releases (set in `go.mod` `go` directive).
+`go.mod` module path: `github.com/dabstractor/skilldozer`. Minimum Go: the latest two stable releases (set in `go.mod` `go` directive).
 
 ---
 
 ## 6. CLI contract (authoritative)
 
-Binary name: **`skpp`**. Flags use POSIX double-dash long form + single-dash short forms. Unknown flags ⇒ error + exit 2.
+Binary name: **`skilldozer`**. Flags use POSIX double-dash long form + single-dash short forms. Unknown flags ⇒ error + exit 2.
 
 ### 6.1 Commands / flags
 
 | Invocation | Behavior | stdout | exit |
 |---|---|---|---|
-| `skpp <tag> [<tag>...]` | Resolve one or more tags to skill directory paths. | One **absolute** path per line, in input order. | `0` if all resolve; `1` if **any** fail (and **nothing** is printed) |
-| `skpp --all` / `-a` | All skills, directory paths. | One absolute path per line (sorted by tag). | `0` |
-| `skpp --list` / `-l` | Human-readable catalog. | Table: `TAG`, `NAME`, `DESCRIPTION` (wrapped). | `0` (`1` if no skills found) |
-| `skpp --search <q>` / `-s <q>` | Substring (case-insensitive) search over tag, frontmatter `name`, `description`, and `metadata.keywords`. | Same table format as `--list`, filtered. | `0`; `1` if no matches |
-| `skpp check` | Validate every skill on disk (see §9). | Report: `OK` lines + any `WARN`/`ERROR` lines. | `0` if clean; `1` if any ERROR |
-| `skpp init` | First-run setup (see §8.2): prompt for the skills store dir, create it if missing, write the config, seed a template if empty, validate. Non-interactive: `skpp init <dir>` / `skpp init --store <dir>`. | The configured store path. | `0` on success; `1` on error/cancel |
-| `skpp --path` / `-p` | Where is `skpp` looking? | Absolute path of the resolved skills dir. | `0` (`1` if unresolvable) |
-| `skpp --help` / `-h` | Usage. | Help text (to stdout). | `0` |
-| `skpp --version` / `-v` | Version. | `skpp <version>` (single line). | `0` |
+| `skilldozer <tag> [<tag>...]` | Resolve one or more tags to skill directory paths. | One **absolute** path per line, in input order. | `0` if all resolve; `1` if **any** fail (and **nothing** is printed) |
+| `skilldozer --all` / `-a` | All skills, directory paths. | One absolute path per line (sorted by tag). | `0` |
+| `skilldozer --list` / `-l` | Human-readable catalog. | Table: `TAG`, `NAME`, `DESCRIPTION` (wrapped). | `0` (`1` if no skills found) |
+| `skilldozer --search <q>` / `-s <q>` | Substring (case-insensitive) search over tag, frontmatter `name`, `description`, and `metadata.keywords`. | Same table format as `--list`, filtered. | `0`; `1` if no matches |
+| `skilldozer check` | Validate every skill on disk (see §9). | Report: `OK` lines + any `WARN`/`ERROR` lines. | `0` if clean; `1` if any ERROR |
+| `skilldozer init` | First-run setup (see §8.2): prompt for the skills store dir, create it if missing, write the config, seed a template if empty, validate. Non-interactive: `skilldozer init <dir>` / `skilldozer init --store <dir>`. | The configured store path. | `0` on success; `1` on error/cancel |
+| `skilldozer --path` / `-p` | Where is `skilldozer` looking? | Absolute path of the resolved skills dir. | `0` (`1` if unresolvable) |
+| `skilldozer --help` / `-h` | Usage. | Help text (to stdout). | `0` |
+| `skilldozer --version` / `-v` | Version. | `skilldozer <version>` (single line). | `0` |
 
 ### 6.2 Modifiers (combine with tag resolution or `--all`)
 
 | Flag | Effect |
 |---|---|
-| `--file` / `-f` | Print the `SKILL.md` file path instead of the directory path. E.g. `skpp -f example`. |
+| `--file` / `-f` | Print the `SKILL.md` file path instead of the directory path. E.g. `skilldozer -f example`. |
 | `--no-color` | Disable ANSI color even on a TTY. |
 | `--relative` | Print paths relative to the skills dir instead of absolute (machine-local convenience; default is absolute). |
 
 ### 6.3 Default behavior
 
-- **No arguments and no flag** ⇒ print usage to **stderr**, exit `1` (parity with `get-server-config.sh`). (`skpp` with just `--help` prints usage to stdout, exit 0.)
+- **No arguments and no flag** ⇒ print usage to **stderr**, exit `1` (parity with `get-server-config.sh`). (`skilldozer` with just `--help` prints usage to stdout, exit 0.)
 - `--help` / `--version` take precedence over everything else.
 - Mixing `<tag>` with `--list`/`--search`/`--all` is an error (exit 2): these are mutually exclusive modes.
 
 ### 6.4 Error semantics (critical for `$(...)` use)
 
-- **Any** unresolved/ambiguous tag in a `skpp <tag>...` invocation ⇒ print **one** error line per problem tag to stderr, print **nothing** to stdout, exit `1`. This guarantees `pi --skill "$(skpp badtag)"` fails loudly rather than passing a garbage path.
+- **Any** unresolved/ambiguous tag in a `skilldozer <tag>...` invocation ⇒ print **one** error line per problem tag to stderr, print **nothing** to stdout, exit `1`. This guarantees `pi --skill "$(skilldozer badtag)"` fails loudly rather than passing a garbage path.
 - Ambiguous tag (a short name matching >1 skill) ⇒ stderr lists the candidate full tags, exit `1`.
-- Skills dir cannot be located / skpp is unconfigured ⇒ stderr: `skpp is not configured; run \`skpp init\`` (or, if configured but the dir vanished, the concise reason + fix), exit `1`. Bare tag resolution **never** prompts (see §8.2), so `pi --skill "$(skpp x)"` fails loudly instead of hanging inside command substitution.
+- Skills dir cannot be located / skilldozer is unconfigured ⇒ stderr: `skilldozer is not configured; run \`skilldozer init\`` (or, if configured but the dir vanished, the concise reason + fix), exit `1`. Bare tag resolution **never** prompts (see §8.2), so `pi --skill "$(skilldozer x)"` fails loudly instead of hanging inside command substitution.
 
 ---
 
@@ -156,7 +156,7 @@ Binary name: **`skpp`**. Flags use POSIX double-dash long form + single-dash sho
    - `category` — `metadata.category` if present.
    - `aliases` — `metadata.aliases` (list) if present, else `[]`.
 
-> Because everything is read from disk, there is **no index file**. `skpp` rebuilds the index on every invocation (fast: it's a directory walk of a small tree).
+> Because everything is read from disk, there is **no index file**. `skilldozer` rebuilds the index on every invocation (fast: it's a directory walk of a small tree).
 
 ### 7.2 Tag resolution precedence (first match wins; later steps only consulted if earlier produced nothing)
 
@@ -170,10 +170,10 @@ Given an input `tag`:
 
 Examples (assume skills `skills/foo/SKILL.md` with `name: foo-helper`, and `skills/writing/reddit/SKILL.md`):
 
-- `skpp foo` → `…/skills/foo`
-- `skpp writing/reddit` → `…/skills/writing/reddit`
-- `skpp reddit` → `…/skills/writing/reddit` (basename, unambiguous)
-- `skpp foo-helper` → `…/skills/foo` (by `name`)
+- `skilldozer foo` → `…/skills/foo`
+- `skilldozer writing/reddit` → `…/skills/writing/reddit`
+- `skilldozer reddit` → `…/skills/writing/reddit` (basename, unambiguous)
+- `skilldozer foo-helper` → `…/skills/foo` (by `name`)
 
 ### 7.3 Frontmatter parsing
 
@@ -185,11 +185,11 @@ Examples (assume skills `skills/foo/SKILL.md` with `name: foo-helper`, and `skil
 
 ## 8. Locating the skills directory
 
-`skpp` does not assume the store lives next to the binary or inside a checkout. A small settings file records where the user keeps their skills, written by `skpp init` on first use. The store can live anywhere.
+`skilldozer` does not assume the store lives next to the binary or inside a checkout. A small settings file records where the user keeps their skills, written by `skilldozer init` on first use. The store can live anywhere.
 
 ### 8.1 Configuration file
 
-- Default location: `$XDG_CONFIG_HOME/skpp/config.yaml` (→ `~/.config/skpp/config.yaml`). Override the file path with `SKPP_CONFIG=<file>` (useful for tests / multiple profiles).
+- Default location: `$XDG_CONFIG_HOME/skilldozer/config.yaml` (→ `~/.config/skilldozer/config.yaml`). Override the file path with `SKILLDOZER_CONFIG=<file>` (useful for tests / multiple profiles).
 - This is the **one** fixed, well-known path the binary can bootstrap from; it must not depend on the store location (chicken-and-egg: you cannot discover the config from the dir the config points at).
 - Format: YAML (reuses the existing `yaml.v3` dependency). Minimal valid file:
 
@@ -199,35 +199,35 @@ Examples (assume skills `skills/foo/SKILL.md` with `name: foo-helper`, and `skil
 
 - Unknown keys are ignored (room to grow: default category, color prefs, etc.). A missing or unreadable config is treated as "not yet configured" and falls through to §8.3 rules 3-5 — never a hard error.
 
-### 8.2 First-run setup — `skpp init`
+### 8.2 First-run setup — `skilldozer init`
 
-`skpp init` is the documented first command and the **only** place skpp prompts interactively.
+`skilldozer init` is the documented first command and the **only** place skilldozer prompts interactively.
 
 Interactive (TTY) flow:
 
-1. Prompt: "Where should skpp keep your skills?" Default: `$XDG_DATA_HOME/skpp/skills` (→ `~/.local/share/skpp/skills`).
+1. **Auto-detect from cwd first:** if the current working directory already looks like a store — it contains at least one `SKILL.md` at any depth (the store definition, §7.1) — the default store is **cwd** ("detected skills in <cwd>"). Otherwise the default is `$XDG_DATA_HOME/skilldozer/skills` (→ `~/.local/share/skilldozer/skills`). Then prompt: "Where should skilldozer keep your skills? [<default>]" — Enter accepts the default, typing a path overrides.
 2. `mkdir -p` the chosen dir if it does not exist.
 3. If the dir is empty, seed `example/SKILL.md` as a copy-paste template (a string constant compiled into the binary — **not** `go:embed` of a directory; nothing about the user's collection is compiled in). If the dir already contains skills, adopt it in place; never clobber or delete.
-4. Write `config.yaml` (at `$SKPP_CONFIG` or the default location) with the absolute `store` path.
-5. Print the output of `skpp --path` (which rule won) and `skpp check`.
+4. Write `config.yaml` (at `$SKILLDOZER_CONFIG` or the default location) with the absolute `store` path.
+5. Print the output of `skilldozer --path` (which rule won) and `skilldozer check`.
 
-Non-interactive: `skpp init <dir>` or `skpp init --store <dir>` (for scripts / CI). `SKPP_SKILLS_DIR` set at runtime still bypasses the config entirely.
+Non-interactive: `skilldozer init <dir>` or `skilldozer init --store <dir>` (for scripts / CI). With no `<dir>`/`--store`, the same cwd-auto-detect applies — run from a skill-containing dir and it adopts that dir as the store with no prompt; run from elsewhere and it uses the XDG default. `SKILLDOZER_SKILLS_DIR` set at runtime still bypasses the config entirely.
 
-**Prompt safety (load-bearing):** the bare `skpp <tag>` path **never** prompts. If unconfigured (every rule in §8.3 misses), it writes to stderr exactly `skpp is not configured; run \`skpp init\``, exits `1`, and writes **nothing** to stdout — so `pi --skill "$(skpp x)"` fails loudly instead of hanging inside command substitution. Any convenience auto-prompt anywhere else must be gated on `isatty(stdin)`.
+**Prompt safety (load-bearing):** the bare `skilldozer <tag>` path **never** prompts. If unconfigured (every rule in §8.3 misses), it writes to stderr exactly `skilldozer is not configured; run \`skilldozer init\``, exits `1`, and writes **nothing** to stdout — so `pi --skill "$(skilldozer x)"` fails loudly instead of hanging inside command substitution. Any convenience auto-prompt anywhere else must be gated on `isatty(stdin)`.
 
 ### 8.3 Resolution priority (first hit wins)
 
-1. **`SKPP_SKILLS_DIR` env var** — override; if set and an existing dir, use it. Lets CI / tests / temporary redirects win without editing the config.
-2. **Config file `store`** (§8.1) — the primary, set by `skpp init`.
+1. **`SKILLDOZER_SKILLS_DIR` env var** — override; if set and an existing dir, use it. Lets CI / tests / temporary redirects win without editing the config.
+2. **Config file `store`** (§8.1) — the primary, set by `skilldozer init`.
 3. **Sibling of the running binary** (symlink-aware: `os.Executable()` + `filepath.EvalSymlinks()`) — still lets a clone-and-build dev workflow work with zero config.
 4. **Walk up from `cwd`** — for `go run` / dev.
-5. **None** ⇒ unconfigured: stderr one-line fix (`run \`skpp init\``), exit `1`.
+5. **None** ⇒ unconfigured: stderr one-line fix (`run \`skilldozer init\``), exit `1`.
 
-`skpp --path` reports which rule won, on stderr, with one of the labels: `SKPP_SKILLS_DIR`, `config file`, `sibling of binary`, `ancestor of cwd`. This matters because a bad `SKPP_SKILLS_DIR` value is silently ignored and falls through — `--path` is the only way to tell which directory actually won. This remains the single most failure-prone area — implement and test it first (see §13 acceptance).
+`skilldozer --path` reports which rule won, on stderr, with one of the labels: `SKILLDOZER_SKILLS_DIR`, `config file`, `sibling of binary`, `ancestor of cwd`. This matters because a bad `SKILLDOZER_SKILLS_DIR` value is silently ignored and falls through — `--path` is the only way to tell which directory actually won. This remains the single most failure-prone area — implement and test it first (see §13 acceptance).
 
 ---
 
-## 9. Validation — `skpp check`
+## 9. Validation — `skilldozer check`
 
 Walks the store and reports problems (exit `1` if any ERROR):
 
@@ -254,14 +254,14 @@ skills/<tag>/
 └── assets/           # optional static assets
 ```
 
-**`SKILL.md` frontmatter** — required fields per the Agent Skills standard, plus **skpp conventions** stored under the standard `metadata` map (so nothing is non-standard):
+**`SKILL.md` frontmatter** — required fields per the Agent Skills standard, plus **skilldozer conventions** stored under the standard `metadata` map (so nothing is non-standard):
 
 ````markdown
 ---
 name: my-skill-tag
 description: >
   One to two sentences: what this skill does and precisely when to use it.
-  This field drives pi's on-demand loading AND skpp's --search.
+  This field drives pi's on-demand loading AND skilldozer's --search.
 metadata:
   keywords: [writing, reddit, social]
   category: writing
@@ -276,7 +276,7 @@ Body instructions for the agent (loaded on-demand by pi).
 ````
 
 - `name` should match the directory name where practical (but is **not required** to).
-- `metadata.keywords` / `metadata.category` / `metadata.aliases` are **optional** and exist only to enrich `skpp --search` and tag aliases. They are standard-compliant (`metadata` is a spec'd optional field).
+- `metadata.keywords` / `metadata.category` / `metadata.aliases` are **optional** and exist only to enrich `skilldozer --search` and tag aliases. They are standard-compliant (`metadata` is a spec'd optional field).
 - All asset/script references inside the body use **paths relative to the skill directory** (pi resolves them against the dir we hand to `--skill`).
 
 ---
@@ -290,23 +290,23 @@ Ship **exactly one** example so `--list`/resolution are demonstrable out of the 
 ---
 name: example
 description: >
-  Reference example skill for skpp. Demonstrates the required frontmatter and
-  how skpp resolves a tag to an absolute path. Safe to delete once you add real skills.
+  Reference example skill for skilldozer. Demonstrates the required frontmatter and
+  how skilldozer resolves a tag to an absolute path. Safe to delete once you add real skills.
 metadata:
-  keywords: [example, demo, skpp]
+  keywords: [example, demo, skilldozer]
   category: meta
 ---
 
 # Example Skill
 
-This skill exists only so `skpp` has something to resolve.
+This skill exists only so `skilldozer` has something to resolve.
 
 Try:
 
 ```bash
-skpp example                       # prints this directory's absolute path
-skpp -f example                    # prints .../skills/example/SKILL.md
-pi --skill "$(skpp example)"       # loads this skill into pi
+skilldozer example                       # prints this directory's absolute path
+skilldozer -f example                    # prints .../skills/example/SKILL.md
+pi --skill "$(skilldozer example)"       # loads this skill into pi
 ```
 ````
 
@@ -322,17 +322,17 @@ Behavior:
 
 1. `cd` to the script's own directory (the repo root).
 2. Verify `go` is on `PATH`; if not, print install instructions and exit `1`.
-3. `go build -trimpath -ldflags "-s -w -X main.version=$(git describe --tags --always 2>/dev/null || echo dev)" -o skpp .`
-4. Pick a target bin dir in this order: `$SKPP_INSTALL_BIN` (if set) → `$HOME/.local/bin` (if present or creatable) → `/usr/local/bin` (if writable, else needs `sudo`).
-5. **Symlink** (not copy) `<target>/skpp` → `<repo>/skpp`, so `os.Executable()` resolves back to the repo and finds `skills/`. If a symlink already exists, refresh it.
+3. `go build -trimpath -ldflags "-s -w -X main.version=$(git describe --tags --always 2>/dev/null || echo dev)" -o skilldozer .`
+4. Pick a target bin dir in this order: `$SKILLDOZER_INSTALL_BIN` (if set) → `$HOME/.local/bin` (if present or creatable) → `/usr/local/bin` (if writable, else needs `sudo`).
+5. **Symlink** (not copy) `<target>/skilldozer` → `<repo>/skilldozer`, so `os.Executable()` resolves back to the repo and finds `skills/`. If a symlink already exists, refresh it.
 6. Ensure the target dir is on `PATH`; if not, print the exact `export PATH=…` line for the detected shell (`~/.bashrc` / `~/.zshrc` / `~/.config/fish/config.fish`).
-7. Print a verification command: `skpp example`.
+7. Print a verification command: `skilldozer example`.
 
-> **Why symlink, not copy:** with `skpp init` (§8) either works — copy is no longer fatal, because the store no longer has to be the binary's sibling. Symlink is still recommended for clone users: the sibling-of-binary rule then gives a zero-config default store (the repo's own `skills/`), and `git pull && go build` updates the linked binary in place. Clone users may run `skpp init` later only if they want to relocate the store.
+> **Why symlink, not copy:** with `skilldozer init` (§8) either works — copy is no longer fatal, because the store no longer has to be the binary's sibling. Symlink is still recommended for clone users: the sibling-of-binary rule then gives a zero-config default store (the repo's own `skills/`), and `git pull && go build` updates the linked binary in place. Clone users may run `skilldozer init` later only if they want to relocate the store.
 
 ### 12.2 `go install`
 
-`go install github.com/dabstractor/skpp@latest` is a first-class install path: the binary is self-sufficient. It lands in `$(go env GOPATH)/bin`; on first use the user runs `skpp init` (§8.2), which creates the store and writes the config. **No clone required, no `SKPP_SKILLS_DIR` needed for normal use.** The earlier caveat ("must clone the repo and set the env var") is obsolete under the config model and is removed.
+`go install github.com/dabstractor/skilldozer@latest` is a first-class install path: the binary is self-sufficient. It lands in `$(go env GOPATH)/bin`; on first use the user runs `skilldozer init` (§8.2), which creates the store and writes the config. **No clone required, no `SKILLDOZER_SKILLS_DIR` needed for normal use.** The earlier caveat ("must clone the repo and set the env var") is obsolete under the config model and is removed.
 
 ### 12.3 Releases (optional, phase 2)
 
@@ -342,51 +342,51 @@ If added: a GitHub Actions workflow that builds a `linux/amd64`, `linux/arm64`, 
 
 ## 13. Acceptance criteria (the implementer must verify all pass)
 
-From a clean clone at `~/projects/skpp`:
+From a clean clone at `~/projects/skilldozer`:
 
 ```bash
 # Build
-go build -o skpp . && echo OK
-./skpp --version                      # prints: skpp <something>
+go build -o skilldozer . && echo OK
+./skilldozer --version                      # prints: skilldozer <something>
 
 # Discovery + path
-test "$(./skpp --path)" = "$PWD/skills"   # sibling-of-binary rule
-./skpp --list                          # shows the `example` skill
-test -d "$(./skpp example)"            # resolves to a real dir
-test -f "$(./skpp -f example)"         # -f prints the SKILL.md path
+test "$(./skilldozer --path)" = "$PWD/skills"   # sibling-of-binary rule
+./skilldozer --list                          # shows the `example` skill
+test -d "$(./skilldozer example)"            # resolves to a real dir
+test -f "$(./skilldozer -f example)"         # -f prints the SKILL.md path
 
 # Error contract: unknown tag prints nothing to stdout, exits 1
-out=$(./skpp nope 2>/dev/null); rc=$?
+out=$(./skilldozer nope 2>/dev/null); rc=$?
 [ -z "$out" ] && [ "$rc" = "1" ] && echo "unknown-tag contract OK"
 
 # Absolute-path contract (default)
-case "$(./skpp example)" in /*) echo "absolute OK";; *) echo "FAIL"; exit 1;; esac
+case "$(./skilldozer example)" in /*) echo "absolute OK";; *) echo "FAIL"; exit 1;; esac
 
 # Validation
-./skpp check                           # exits 0, reports the example as OK
+./skilldozer check                           # exits 0, reports the example as OK
 
 # End-to-end with pi (skills loads ONLY via --skill, not auto-discovered)
-pi --no-skills --skill "$(./skpp example)" -p "briefly confirm the example skill is loaded" 2>&1 | head
+pi --no-skills --skill "$(./skilldozer example)" -p "briefly confirm the example skill is loaded" 2>&1 | head
 #   ↑ confirm pi's output references the example skill / does not error
 
 # Symlink install works (resolve-back-to-repo)
-ln -sf "$PWD/skpp" /tmp/skpp-bin/skpp 2>/dev/null || mkdir -p /tmp/skpp-bin && ln -sf "$PWD/skpp" /tmp/skpp-bin/skpp
-/tmp/skpp-bin/skpp example             # still resolves to $PWD/skills/example
-SKPP_SKILLS_DIR="$PWD/skills" ./skpp example   # env override works
+ln -sf "$PWD/skilldozer" /tmp/skilldozer-bin/skilldozer 2>/dev/null || mkdir -p /tmp/skilldozer-bin && ln -sf "$PWD/skilldozer" /tmp/skilldozer-bin/skilldozer
+/tmp/skilldozer-bin/skilldozer example             # still resolves to $PWD/skills/example
+SKILLDOZER_SKILLS_DIR="$PWD/skills" ./skilldozer example   # env override works
 
 # Config + first-run (§8)
-mkdir -p /tmp/skpp-iso && cp ./skpp /tmp/skpp-iso/skpp && cd /tmp/skpp-iso
+mkdir -p /tmp/skilldozer-iso && cp ./skilldozer /tmp/skilldozer-iso/skilldozer && cd /tmp/skilldozer-iso
 # unconfigured (clean HOME, no config, no skills sibling, no walk-up ancestor): hint + exit 1
-env -u SKPP_SKILLS_DIR HOME=/tmp/skpp-iso/home XDG_CONFIG_HOME=/tmp/skpp-iso/home/.config \
-  ./skpp x 2>err; rc=$?
-[ "$rc" = 1 ] && grep -q 'run `skpp init`' err && echo "unconfigured-hint OK"
+env -u SKILLDOZER_SKILLS_DIR HOME=/tmp/skilldozer-iso/home XDG_CONFIG_HOME=/tmp/skilldozer-iso/home/.config \
+  ./skilldozer x 2>err; rc=$?
+[ "$rc" = 1 ] && grep -q 'run `skilldozer init`' err && echo "unconfigured-hint OK"
 # non-interactive init creates the store + writes the config
-SKPP_CONFIG=/tmp/skpp-iso/cfg.yaml ./skpp init --store /tmp/skpp-store
-test -d /tmp/skpp-store                                                    # store created
-grep -q 'store: /tmp/skpp-store' /tmp/skpp-iso/cfg.yaml                     # config written
+SKILLDOZER_CONFIG=/tmp/skilldozer-iso/cfg.yaml ./skilldozer init --store /tmp/skilldozer-store
+test -d /tmp/skilldozer-store                                                    # store created
+grep -q 'store: /tmp/skilldozer-store' /tmp/skilldozer-iso/cfg.yaml                     # config written
 # config rule wins; and env still beats config
-SKPP_CONFIG=/tmp/skpp-iso/cfg.yaml ./skpp --path | grep -q /tmp/skpp-store
-SKPP_SKILLS_DIR=/tmp/skpp-store SKPP_CONFIG=/tmp/skpp-iso/cfg.yaml ./skpp --path 2>&1 | grep -q SKPP_SKILLS_DIR
+SKILLDOZER_CONFIG=/tmp/skilldozer-iso/cfg.yaml ./skilldozer --path | grep -q /tmp/skilldozer-store
+SKILLDOZER_SKILLS_DIR=/tmp/skilldozer-store SKILLDOZER_CONFIG=/tmp/skilldozer-iso/cfg.yaml ./skilldozer --path 2>&1 | grep -q SKILLDOZER_SKILLS_DIR
 cd - >/dev/null
 ```
 
@@ -398,10 +398,10 @@ All of the above must pass. The pi line must show the skill loaded with **`--no-
 
 Ship completions for bash, zsh, fish (parity with mcpeepants). They complete:
 
-- Subcommands/flags after `skpp ` / `skpp --`.
-- **Tags** by invoking `skpp --all` (cheap, disk-derived) for positional completion.
+- Subcommands/flags after `skilldozer ` / `skilldozer --`.
+- **Tags** by invoking `skilldozer --all` (cheap, disk-derived) for positional completion.
 
-Keep them simple: a function that runs `skpp --all` and offers the printed paths' basename-or-relTag. Provide an `install.sh` step (already in §12) OR a short note in README to source/copy the completion file. If time-boxed, completions are the **only** deliverable that may be deferred — flag it clearly in the PR if so.
+Keep them simple: a function that runs `skilldozer --all` and offers the printed paths' basename-or-relTag. Provide an `install.sh` step (already in §12) OR a short note in README to source/copy the completion file. If time-boxed, completions are the **only** deliverable that may be deferred — flag it clearly in the PR if so.
 
 ---
 
@@ -411,11 +411,11 @@ Mirror the mcpeepants README's tone and structure:
 
 1. **Title + one-liner:** "Standalone skill loader for pi — resolves a skill tag to an absolute path for `pi --skill`."
 2. **Why:** centralized skills, **not** in any pi discovery location, loaded only on demand.
-3. **Install:** `install.sh` (symlink) / `go install` (first-class) / from-source. First run: `skpp init` (prompts for the store dir, writes the config).
-4. **Usage:** the canonical `pi --skill "$(skpp tag)"` example, multi-skill example, `-f`, `--list`, `--search`, `--all`, `check`, `--path`.
+3. **Install:** `install.sh` (symlink) / `go install` (first-class) / from-source. First run: `skilldozer init` (prompts for the store dir, writes the config).
+4. **Usage:** the canonical `pi --skill "$(skilldozer tag)"` example, multi-skill example, `-f`, `--list`, `--search`, `--all`, `check`, `--path`.
 5. **Where skills live:** the `skills/` dir, the tag = relative dir path, the discovery rules (§7).
-6. **Adding a skill:** drop a `<tag>/SKILL.md` under `skills/`; required frontmatter; run `skpp check`.
-7. **How `skpp` finds the store:** §8 — `skpp init` writes a config pointing at the store; `SKPP_SKILLS_DIR` overrides it; sibling / walk-up are zero-config dev fallbacks.
+6. **Adding a skill:** drop a `<tag>/SKILL.md` under `skills/`; required frontmatter; run `skilldozer check`.
+7. **How `skilldozer` finds the store:** §8 — `skilldozer init` writes a config pointing at the store; `SKILLDOZER_SKILLS_DIR` overrides it; sibling / walk-up are zero-config dev fallbacks.
 8. **Constraints:** no catalog index (disk-discovered); a settings config file is fine; never auto-discovered by pi; loads only via `--skill`.
 
 ---
@@ -423,14 +423,14 @@ Mirror the mcpeepants README's tone and structure:
 ## 16. `.gitignore`
 
 ```
-/skpp
+/skilldozer
 /dist
 *.test
 *.out
 .DS_Store
 ```
 
-(`/skpp` ignores the locally-built binary; everything else is committed, including `skills/example/`.)
+(`/skilldozer` ignores the locally-built binary; everything else is committed, including `skills/example/`.)
 
 ---
 
@@ -438,8 +438,8 @@ Mirror the mcpeepants README's tone and structure:
 
 - ❌ Do **not** add a **catalog** index/manifest (e.g. `skills.json` enumerating skills). The catalog is always walked from disk. A **settings** file (store location, etc.) is expected and fine — see §8; the rule is only that catalog data already on disk is never duplicated into a sidecar.
 - ❌ Do **not** place skills in any pi auto-discovery location. The store is loaded **only** via `--skill`.
-- ❌ Do **not** make `skpp` install/copy skills into `~/.pi/...` or `~/.agents/...`. It only prints paths.
-- ❌ Do **not** print anything to stdout on a failed/unknown tag resolution (breaks `pi --skill "$(skpp x)"`).
+- ❌ Do **not** make `skilldozer` install/copy skills into `~/.pi/...` or `~/.agents/...`. It only prints paths.
+- ❌ Do **not** print anything to stdout on a failed/unknown tag resolution (breaks `pi --skill "$(skilldozer x)"`).
 - ❌ Do **not** require Node, Python, or any runtime at *run* time (build-time `go` is fine).
 - ❌ Do **not** ship more than the one example skill.
 
@@ -449,7 +449,7 @@ Mirror the mcpeepants README's tone and structure:
 
 1. `go.mod` + `internal/skillsdir` + `main.go --path` → prove location resolution (§8). **Hardest part; do first.**
 2. `internal/discover` (walk + frontmatter parse) → `--list`.
-3. `internal/resolve` → `skpp <tag>`, `-f`, `--all`, `--relative`.
+3. `internal/resolve` → `skilldozer <tag>`, `-f`, `--all`, `--relative`.
 4. `--search`, `check`.
 5. `--help`/`--version`/error semantics + exit codes (§6.4).
 6. Example skill + run §13 acceptance.
@@ -462,7 +462,7 @@ Mirror the mcpeepants README's tone and structure:
 
 | # | Decision | Default chosen | Rationale |
 |---|---|---|---|
-| 1 | Repo / binary name | `skpp` | The command as written in the request |
+| 1 | Repo / binary name | `skilldozer` | The command as written in the request |
 | 2 | Visibility | **public** | Matches mcpeepants + user's other repos |
 | 3 | Language | **Go** | Static binary, instant startup, symlink-aware path resolution |
 | 4 | Output unit | **directory** (default), `--file` for `SKILL.md` | `--skill <dir>` is supported & includes assets |
@@ -470,9 +470,11 @@ Mirror the mcpeepants README's tone and structure:
 | 6 | Canonical tag | relative dir path under `skills/`; basename/name/alias fallbacks | Inferable from disk; tolerant of common usage |
 | 7 | Search metadata | `metadata.keywords`/`category`/`aliases` in frontmatter | Uses the spec's own optional `metadata` field |
 | 8 | Frontmatter parser | `gopkg.in/yaml.v3` | Robust; only third-party dep |
-| 9 | Install method | `go install` / release binary / `install.sh`; `skpp init` configures the store | No clone forced. The binary is self-sufficient; first run prompts for (or is told via flag/env) the store dir. Sibling / walk-up rules kept as zero-config dev fallbacks. |
+| 9 | Install method | `go install` / release binary / `install.sh`; `skilldozer init` configures the store | No clone forced. The binary is self-sufficient; first run prompts for (or is told via flag/env) the store dir. Sibling / walk-up rules kept as zero-config dev fallbacks. |
 | 10 | Shipped skills | exactly one `example` | Proves the pipeline; repo is a loader, not a library |
 | 11 | License | MIT | Match mcpeepants conventions |
-| 12 | Settings file | `$XDG_CONFIG_HOME/skpp/config.yaml`, key `store` (YAML; reuses `yaml.v3`); `SKPP_CONFIG` overrides the path | Fixed home so the binary can bootstrap without being told; YAML avoids a new dependency |
-| 13 | First-run UX | `skpp init` prompts interactively; bare tags never prompt (any auto-prompt TTY-gated) | Protects the `pi --skill "$(skpp x)"` contract from hanging inside command substitution |
-| 14 | Discovery order | env `SKPP_SKILLS_DIR` → config `store` → sibling of binary → walk-up → "run `skpp init`" | Env overrides config for CI/tests; heuristics kept as zero-config dev fallbacks |
+| 12 | Settings file | `$XDG_CONFIG_HOME/skilldozer/config.yaml`, key `store` (YAML; reuses `yaml.v3`); `SKILLDOZER_CONFIG` overrides the path | Fixed home so the binary can bootstrap without being told; YAML avoids a new dependency |
+| 13 | First-run UX | `skilldozer init` prompts interactively; bare tags never prompt (any auto-prompt TTY-gated) | Protects the `pi --skill "$(skilldozer x)"` contract from hanging inside command substitution |
+| 14 | Discovery order | env `SKILLDOZER_SKILLS_DIR` → config `store` → sibling of binary → walk-up → "run `skilldozer init`" | Env overrides config for CI/tests; heuristics kept as zero-config dev fallbacks |
+| 15 | Name | **Skilldozer** (binary `skilldozer`, env prefix `SKILLDOZER_`, module `github.com/dabstractor/skilldozer`) | Renamed from the `skpp` working title. `plan/` archive left as historical (it *was* skpp when written) |
+| 16 | `init` cwd auto-detect | If cwd contains any `SKILL.md` (any depth), default the store to cwd; else `$XDG_DATA_HOME/skilldozer/skills` | Run `skilldozer init` inside an existing skills dir and it adopts it in place, no typing |

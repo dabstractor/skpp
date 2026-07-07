@@ -3,7 +3,7 @@ package search
 import (
 	"testing"
 
-	"github.com/dabstractor/skpp/internal/discover"
+	"github.com/dabstractor/skilldozer/internal/discover"
 )
 
 // sk builds one discover.Skill with the searchable fields set (HasFM true so all
@@ -124,7 +124,7 @@ func TestSearchNoFrontmatterStillMatchesByTag(t *testing.T) {
 }
 
 func TestSearchMatchesCategoryAndAliases(t *testing.T) {
-	// PRD §10 states metadata.aliases/category "exist only to enrich skpp
+	// PRD §10 states metadata.aliases/category "exist only to enrich skilldozer
 	// --search" — so aliases and category ARE searched (decisions.md §D4: §10
 	// wins over §6.1). This makes --search consistent with resolve, which
 	// resolves by alias (§7.2 step 4). Issue 4 fix: inverts the old

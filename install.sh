@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install.sh — build skpp and symlink it into PATH (PRD §12.1).
+# install.sh — build skilldozer and symlink it into PATH (PRD §12.1).
 #
 # Mirrors mcpeepants QUICK_INSTALL.sh spirit (banner, shell detection, verify
 # block) but does MORE: it BUILDS the binary with version ldflags and SYMLINKS
@@ -16,7 +16,7 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-echo "🚀 skpp install"
+echo "🚀 skilldozer install"
 echo "Repo: $SCRIPT_DIR"
 echo
 
@@ -37,13 +37,13 @@ fi
 # symlink is created.
 go build -trimpath \
   -ldflags "-s -w -X main.version=$(git describe --tags --always 2>/dev/null || echo dev)" \
-  -o skpp .
+  -o skilldozer .
 
 # --- §12.1 step 4: pick target bin dir (first usable wins) -------------------
 # Override → ~/.local/bin → /usr/local/bin (only if writable) → fail with hint.
 # NO silent sudo (Gotcha 5): if root is required, print the exact command.
-if [[ -n "${SKPP_INSTALL_BIN:-}" ]]; then
-  TARGET="$SKPP_INSTALL_BIN"
+if [[ -n "${SKILLDOZER_INSTALL_BIN:-}" ]]; then
+  TARGET="$SKILLDOZER_INSTALL_BIN"
   mkdir -p "$TARGET"
 elif [[ -d "$HOME/.local/bin" ]] || [[ -w "$HOME" ]]; then
   TARGET="$HOME/.local/bin"
@@ -53,21 +53,21 @@ elif [[ -w "/usr/local/bin" ]]; then
 else
   cat >&2 <<EOF
 ERROR: no writable install target found.
-Re-run with: SKPP_INSTALL_BIN=/your/bin ./install.sh
-Or (system-wide): sudo ln -sfn "$SCRIPT_DIR/skpp" /usr/local/bin/skpp
+Re-run with: SKILLDOZER_INSTALL_BIN=/your/bin ./install.sh
+Or (system-wide): sudo ln -sfn "$SCRIPT_DIR/skilldozer" /usr/local/bin/skilldozer
 EOF
   exit 1
 fi
 
-# --- §12.1 step 5: SYMLINK (ln -sfn) $TARGET/skpp → $SCRIPT_DIR/skpp ---------
+# --- §12.1 step 5: SYMLINK (ln -sfn) $TARGET/skilldozer → $SCRIPT_DIR/skilldozer ---------
 # THE load-bearing line (Gotchas 1–3):
 #  - symlink, NEVER copy (cp breaks §8.2 sibling resolution silently)
 #  - `ln -sfn`, not `ln -sf` (-n treats an existing symlink-to-dir dest as a
 #    file; defensive even though our dest is a file)
-#  - ABSOLUTE target ($SCRIPT_DIR/skpp); relative would resolve against $TARGET
-ln -sfn "$SCRIPT_DIR/skpp" "$TARGET/skpp"
+#  - ABSOLUTE target ($SCRIPT_DIR/skilldozer); relative would resolve against $TARGET
+ln -sfn "$SCRIPT_DIR/skilldozer" "$TARGET/skilldozer"
 
-echo "Linked: $TARGET/skpp -> $SCRIPT_DIR/skpp"
+echo "Linked: $TARGET/skilldozer -> $SCRIPT_DIR/skilldozer"
 
 # --- §12.1 step 6: ensure $TARGET on PATH; else PRINT rc-file snippet --------
 # Detect shell via basename of $SHELL; PRINT only — never auto-edit rc files
@@ -91,12 +91,12 @@ esac
 
 # --- §12.1 step 7: verify (absolute symlink path works pre-PATH-reload) ------
 # Use the ABSOLUTE symlink path (Gotcha 8): it works even before the new PATH
-# entry is live in the current shell; bare `skpp` may hit a stale hash until reload.
+# entry is live in the current shell; bare `skilldozer` may hit a stale hash until reload.
 echo
 echo "Verify:"
-"$TARGET/skpp" --version
-"$TARGET/skpp" example
+"$TARGET/skilldozer" --version
+"$TARGET/skilldozer" example
 
 echo
-echo "Done. Reload your shell (exec \$SHELL), then run:  skpp example"
+echo "Done. Reload your shell (exec \$SHELL), then run:  skilldozer example"
 echo "(Shell completions are not installed by this script — see task P1.M6.T15.S1.)"

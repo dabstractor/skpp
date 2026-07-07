@@ -28,7 +28,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dabstractor/skpp/internal/discover"
+	"github.com/dabstractor/skilldozer/internal/discover"
 )
 
 // MatchKind identifies which §7.2 step resolved a tag. Its zero value is not a
@@ -77,7 +77,7 @@ type UnknownError struct {
 	Tag string
 }
 
-// Error implements error. No "skpp:" prefix (main adds program context, mirroring
+// Error implements error. No "skilldozer:" prefix (main adds program context, mirroring
 // skillsdir.ErrNotFound).
 func (e *UnknownError) Error() string {
 	return fmt.Sprintf("unknown skill tag %q", e.Tag)

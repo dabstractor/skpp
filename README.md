@@ -1,19 +1,19 @@
-# skpp
+# Skilldozer
 
 Standalone skill loader for pi. Resolves a skill tag to an absolute path for `pi --skill`.
 
 ## Why
 
-`skpp` gives you a centralized, on-disk catalog of pi skills addressed by short
+`skilldozer` gives you a centralized, on-disk catalog of pi skills addressed by short
 tags. The catalog lives **deliberately outside** every directory pi scans, so
 skills never bloat your context automatically. They load **only on demand** when
 you pass an explicit `--skill`:
 
 ```bash
-pi --skill "$(skpp example)"
+pi --skill "$(skilldozer example)"
 ```
 
-If a tag is unknown, `skpp` prints nothing and exits 1, so the `$(...)` fails
+If a tag is unknown, `skilldozer` prints nothing and exits 1, so the `$(...)` fails
 loudly instead of handing pi an empty path.
 
 ## Install
@@ -23,69 +23,69 @@ Three paths. `./install.sh` is recommended.
 **A. `./install.sh` (recommended)**
 
 Builds the binary with version info and symlinks it into `~/.local/bin`
-(or `$SKPP_INSTALL_BIN`, or `/usr/local/bin` if that is what is writable):
+(or `$SKILLDOZER_INSTALL_BIN`, or `/usr/local/bin` if that is what is writable):
 
 ```bash
 ./install.sh
 ```
 
-The install **symlinks** rather than copies. That matters: `skpp` resolves its
+The install **symlinks** rather than copies. That matters: `skilldozer` resolves its
 own executable path back through the symlink, which is how it finds the
 adjacent `skills/` directory with no env var.
 
 **B. `go install`**
 
 ```bash
-go install github.com/dabstractor/skpp@latest
+go install github.com/dabstractor/skilldozer@latest
 ```
 
 > **`go install` caveat.** A `go install`'d binary lands in
-> `$(go env GOPATH)/bin` with **no** adjacent `skills/` directory, so `skpp`
+> `$(go env GOPATH)/bin` with **no** adjacent `skills/` directory, so `skilldozer`
 > cannot auto-discover the store from there. Set the runtime override before
 > use:
 >
 > ```bash
-> export SKPP_SKILLS_DIR=/absolute/path/to/your/cloned/skpp/skills
+> export SKILLDOZER_SKILLS_DIR=/absolute/path/to/your/cloned/skilldozer/skills
 > ```
 >
-> If you hit `skpp example` reporting it cannot find skills, this is the fix.
+> If you hit `skilldozer example` reporting it cannot find skills, this is the fix.
 > (Prefer `./install.sh`, which symlinks the binary next to the repo so
 > discovery works with no env var.)
 
 **C. From source**
 
 ```bash
-go build -o skpp . && ./skpp example
+go build -o skilldozer . && ./skilldozer example
 ```
 
 or build, then symlink it yourself:
 
 ```bash
-go build -o skpp .
-ln -sfn "$PWD/skpp" ~/.local/bin/skpp
+go build -o skilldozer .
+ln -sfn "$PWD/skilldozer" ~/.local/bin/skilldozer
 ```
 
-Run `./skpp example` from the repo, or use the symlink from anywhere.
+Run `./skilldozer example` from the repo, or use the symlink from anywhere.
 
 ## Shell completions
 
-`skpp` ships dynamic completions for bash, zsh, and fish. Tag completion is
-not a static list: the shell calls `skpp --relative --all` at completion time,
+`skilldozer` ships dynamic completions for bash, zsh, and fish. Tag completion is
+not a static list: the shell calls `skilldozer --relative --all` at completion time,
 so it never goes stale as you add skills.
 
 **bash** (one of):
 
 ```bash
-source /path/to/skpp/completions/skpp.bash
-cp completions/skpp.bash ~/.local/share/bash-completion/completions/skpp
-cp completions/skpp.bash /etc/bash_completion.d/skpp
+source /path/to/skilldozer/completions/skilldozer.bash
+cp completions/skilldozer.bash ~/.local/share/bash-completion/completions/skilldozer
+cp completions/skilldozer.bash /etc/bash_completion.d/skilldozer
 ```
 
 **zsh** (one of):
 
 ```bash
-cp completions/_skpp ~/.zsh/completions/_skpp
-cp completions/_skpp /usr/local/share/zsh/site-functions/_skpp
+cp completions/_skilldozer ~/.zsh/completions/_skilldozer
+cp completions/_skilldozer /usr/local/share/zsh/site-functions/_skilldozer
 ```
 
 then ensure this is in your `.zshrc`:
@@ -97,7 +97,7 @@ autoload -U compinit && compinit
 **fish**:
 
 ```bash
-cp completions/skpp.fish ~/.config/fish/completions/skpp.fish
+cp completions/skilldozer.fish ~/.config/fish/completions/skilldozer.fish
 ```
 
 `install.sh` does not install completions automatically; copy the file you
@@ -108,58 +108,58 @@ want as shown above.
 The canonical one-liner, first:
 
 ```bash
-pi --skill "$(skpp example)"
+pi --skill "$(skilldozer example)"
 ```
 
 Everything else, commented:
 
 ```bash
 # Resolve a tag to an absolute path (default: the skill directory)
-skpp example                       # → /…/skills/example
+skilldozer example                       # → /…/skills/example
 
 # Print the SKILL.md path instead of the directory (-f / --file)
-skpp -f example                    # → /…/skills/example/SKILL.md
+skilldozer -f example                    # → /…/skills/example/SKILL.md
 
 # Load several skills into pi in one command
-pi --skill "$(skpp writing/reddit)" --skill "$(skpp example)"
+pi --skill "$(skilldozer writing/reddit)" --skill "$(skilldozer example)"
 
 # Resolve multiple tags at once (one absolute path per line, input order)
-skpp example writing/reddit
+skilldozer example writing/reddit
 
 # Human-readable catalog and substring search
-skpp --list
-skpp --search reddit            # matches tag / name / description / keywords / aliases / category
+skilldozer --list
+skilldozer --search reddit            # matches tag / name / description / keywords / aliases / category
 
 # Print every skill path, sorted by tag
-skpp --all
+skilldozer --all
 
 # Validate every skill on disk
-skpp check
+skilldozer check
 
 # Where is the resolved skills directory? (its discovery rule prints to stderr)
-skpp --path                        # → /…/skills (stderr: found via sibling of binary)
+skilldozer --path                        # → /…/skills (stderr: found via sibling of binary)
 
 # Print paths relative to the skills directory instead of absolute
-skpp --relative example
+skilldozer --relative example
 
 # Disable ANSI color even on a TTY (for --list / --search tables)
-skpp --no-color --list
+skilldozer --no-color --list
 
 # Version is the git-describe value (dynamic, not a fixed string)
-skpp --version
+skilldozer --version
 
 # Short flags combine (-af) and long flags accept --flag=value (--search=reddit)
 ```
 
 **Error contract.** An unknown tag prints **nothing** to stdout and exits 1
 (the error goes to stderr only). That is why
-`pi --skill "$(skpp badtag)"` fails loudly instead of loading nothing. When
+`pi --skill "$(skilldozer badtag)"` fails loudly instead of loading nothing. When
 multiple tags are given, any unresolved tag causes nothing to be printed and
 exit 1, so `pi` never sees a partial result. The listing modes `--path`,
 `--list`, `--search`, and `--all` are mutually exclusive — combining any two
 exits 2.
 
-`skpp --help` lists every flag.
+`skilldozer --help` lists every flag.
 
 ## Where skills live
 
@@ -185,8 +185,8 @@ Tag resolution tries, in order:
 4. a declared alias (see `metadata.aliases`)
 5. else: unknown
 
-So `skpp example`, `skpp writing/reddit`, `skpp reddit` (if unique), and
-`skpp foo-helper` (matching a frontmatter `name`) all resolve.
+So `skilldozer example`, `skilldozer writing/reddit`, `skilldozer reddit` (if unique), and
+`skilldozer foo-helper` (matching a frontmatter `name`) all resolve.
 
 ## Adding a skill
 
@@ -200,7 +200,7 @@ description: >
   One or two sentences describing what the skill does. pi will not load a
   skill that has no description.
 metadata:
-  keywords: [example, demo, skpp]
+  keywords: [example, demo, skilldozer]
   category: meta
   aliases: [demo]
 ---
@@ -221,7 +221,7 @@ Body of the skill. This is what pi loads when you pass the path.
 When you are done, validate everything on disk:
 
 ```bash
-skpp check
+skilldozer check
 ```
 
 Output:
@@ -231,28 +231,28 @@ OK    example (example)
 1 skills, 0 errors, 0 warnings
 ```
 
-## How `skpp` finds the store
+## How `skilldozer` finds the store
 
-`skpp` locates `skills/` by this priority:
+`skilldozer` locates `skills/` by this priority:
 
-1. **`SKPP_SKILLS_DIR` env var**: wins if set and the directory exists. This
+1. **`SKILLDOZER_SKILLS_DIR` env var**: wins if set and the directory exists. This
    is the override `go install` users set (see Install).
 2. **Sibling of the binary**: `os.Executable()` plus `EvalSymlinks()` resolves
    the real binary path and looks for `skills/` next to it. This is the rule a
    `./install.sh` symlink install relies on; a copy would break it silently.
 3. **Walk up from the current directory**: useful during development
-   (`go run .` / running `./skpp` from a checkout).
-4. **Else: fail with a one-line fix** telling you how to set `SKPP_SKILLS_DIR`.
+   (`go run .` / running `./skilldozer` from a checkout).
+4. **Else: fail with a one-line fix** telling you how to set `SKILLDOZER_SKILLS_DIR`.
 
-`skpp --path` reports the winning directory on stdout and the matching rule on
-stderr — one of `SKPP_SKILLS_DIR`, `sibling of binary`, or `ancestor of cwd`.
-The stderr label matters when `SKPP_SKILLS_DIR` is typo'd: a bad value is
+`skilldozer --path` reports the winning directory on stdout and the matching rule on
+stderr — one of `SKILLDOZER_SKILLS_DIR`, `sibling of binary`, or `ancestor of cwd`.
+The stderr label matters when `SKILLDOZER_SKILLS_DIR` is typo'd: a bad value is
 silently ignored and discovery falls through to the sibling / walk-up rule, so
 the `(found via …)` line is the only way to tell the env var was skipped.
 
 ## Constraints
 
-`skpp` is deliberately a thin, manifest-free path printer.
+`skilldozer` is deliberately a thin, manifest-free path printer.
 
 - **Manifest-free.** No `skills.json`, no index file. Everything is resolved
   from the directory tree on each call.
@@ -264,8 +264,8 @@ the `(found via …)` line is the only way to tell the env var was skipped.
   - a `node_modules` package
   - a `package.json` with a `pi.skills` field
 - **Loaded only via `--skill`.** A skill enters your context only when you ask
-  for it explicitly: `pi --skill "$(skpp <tag>)"`.
-- **`skpp` only ever prints paths.** It never copies or installs skills into
+  for it explicitly: `pi --skill "$(skilldozer <tag>)"`.
+- **`skilldozer` only ever prints paths.** It never copies or installs skills into
   `~/.pi/...` or `~/.agents/...`. Where the path points is up to you.
 - **Zero runtime dependencies.** Build-time needs Go; the resulting binary
   stands alone.

@@ -31,7 +31,7 @@ func TestSourceString(t *testing.T) {
 		src  Source
 		want string
 	}{
-		{SourceEnv, "SKPP_SKILLS_DIR"},
+		{SourceEnv, "SKILLDOZER_SKILLS_DIR"},
 		{SourceSibling, "sibling of binary"},
 		{SourceWalkUp, "ancestor of cwd"},
 		{Source(-1), "unknown"}, // out-of-range -> default
@@ -121,7 +121,7 @@ func TestFindEnvRelativePathAbsolutized(t *testing.T) {
 }
 
 // Rule 1 CONTRACT: the env path must NOT be passed through EvalSymlinks.
-// If SKPP_SKILLS_DIR points at a symlink-to-a-dir, findEnv must return the
+// If SKILLDOZER_SKILLS_DIR points at a symlink-to-a-dir, findEnv must return the
 // symlink path (made absolute/clean), NOT the resolved target. The user points
 // exactly where they want.
 func TestFindEnvDoesNotResolveSymlinks(t *testing.T) {
@@ -170,14 +170,14 @@ func makeFakeBinary(t *testing.T, dir, name string) string {
 func TestResolveSiblingFromExeSymlinkCrossDir(t *testing.T) {
 	// tempA holds the REAL binary + its sibling skills/
 	tempA := t.TempDir()
-	binary := makeFakeBinary(t, tempA, "skpp")
+	binary := makeFakeBinary(t, tempA, "skilldozer")
 	skillsA := filepath.Join(tempA, "skills")
 	if err := os.Mkdir(skillsA, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	// tempB holds a symlink to the binary (different dir, like ~/.local/bin)
 	tempB := t.TempDir()
-	link := filepath.Join(tempB, "skpp")
+	link := filepath.Join(tempB, "skilldozer")
 	if err := os.Symlink(binary, link); err != nil {
 		t.Skipf("symlinks not supported on this platform: %v", err)
 	}
@@ -197,7 +197,7 @@ func TestResolveSiblingFromExeSymlinkCrossDir(t *testing.T) {
 // Rule 2: direct (non-symlinked) binary with a sibling skills/ also wins.
 func TestResolveSiblingFromExeDirect(t *testing.T) {
 	tempA := t.TempDir()
-	binary := makeFakeBinary(t, tempA, "skpp")
+	binary := makeFakeBinary(t, tempA, "skilldozer")
 	skillsA := filepath.Join(tempA, "skills")
 	if err := os.Mkdir(skillsA, 0o755); err != nil {
 		t.Fatal(err)
@@ -234,7 +234,7 @@ func TestResolveSiblingFromExeEvalSymlinksFallback(t *testing.T) {
 // Rule 2: binary exists but NO sibling skills/ dir -> miss.
 func TestResolveSiblingFromExeNoSkillsDir(t *testing.T) {
 	tempA := t.TempDir()
-	binary := makeFakeBinary(t, tempA, "skpp")
+	binary := makeFakeBinary(t, tempA, "skilldozer")
 	// deliberately create no skills/ sibling
 	if _, found := resolveSiblingFromExe(binary); found {
 		t.Errorf("resolveSiblingFromExe(no skills): got found=true; want false")
@@ -244,7 +244,7 @@ func TestResolveSiblingFromExeNoSkillsDir(t *testing.T) {
 // Rule 2: sibling path 'skills' is a regular FILE, not a dir -> miss (IsDir guard).
 func TestResolveSiblingFromExeSkillsIsFile(t *testing.T) {
 	tempA := t.TempDir()
-	binary := makeFakeBinary(t, tempA, "skpp")
+	binary := makeFakeBinary(t, tempA, "skilldozer")
 	if err := os.WriteFile(filepath.Join(tempA, "skills"), []byte("not a dir"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -448,7 +448,7 @@ func TestFindWalkUpFindsAncestor(t *testing.T) {
 
 // --- Find (the public combiner) ---
 
-// Find: rule 1 wins when SKPP_SKILLS_DIR is set to an existing dir.
+// Find: rule 1 wins when SKILLDOZER_SKILLS_DIR is set to an existing dir.
 func TestFindRuleEnvWins(t *testing.T) {
 	unsetEnvVar(t)
 	dir := t.TempDir()
@@ -506,7 +506,7 @@ func TestFindAllMissReturnsErrNotFound(t *testing.T) {
 // ErrNotFound message carries the user-facing one-line fix (PRD §8.4 / §6.4).
 func TestErrNotFoundMessageHasFix(t *testing.T) {
 	msg := ErrNotFound.Error()
-	for _, want := range []string{"SKPP_SKILLS_DIR", "cd", "reinstall"} {
+	for _, want := range []string{"SKILLDOZER_SKILLS_DIR", "cd", "reinstall"} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("ErrNotFound message %q missing substring %q", msg, want)
 		}

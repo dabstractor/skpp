@@ -67,7 +67,7 @@ func TestBuildSkillFull(t *testing.T) {
 		Name:        "example",
 		Description: "An example.",
 		Metadata: map[string]any{
-			"keywords":  []any{"example", "demo", "skpp"},
+			"keywords":  []any{"example", "demo", "skilldozer"},
 			"category":  "meta",
 			"aliases":   []any{"ex", "demo-skill"},
 			"unrelated": 7, // ignored
@@ -87,8 +87,8 @@ func TestBuildSkillFull(t *testing.T) {
 	if s.Description != "An example." {
 		t.Errorf("Description=%q; want 'An example.'", s.Description)
 	}
-	if !strEq(s.Keywords, []string{"example", "demo", "skpp"}) {
-		t.Errorf("Keywords=%v; want [example demo skpp] (real []any path)", s.Keywords)
+	if !strEq(s.Keywords, []string{"example", "demo", "skilldozer"}) {
+		t.Errorf("Keywords=%v; want [example demo skilldozer] (real []any path)", s.Keywords)
 	}
 	if s.Category != "meta" {
 		t.Errorf("Category=%q; want meta", s.Category)
@@ -168,7 +168,7 @@ func TestBuildSkillSourceFile(t *testing.T) {
 // then built into a Skill. Proves the genuine []any -> []string path AND that the
 // folded-scalar description is carried through verbatim (trailing \n retained).
 func TestBuildSkillEndToEnd(t *testing.T) {
-	path := writeSkill(t, "---\nname: example\ndescription: >\n  Reference example skill for skpp.\nmetadata:\n  keywords: [example, demo, skpp]\n  category: meta\n  aliases:\n    - ex\n    - demo\n---\n# body\n")
+	path := writeSkill(t, "---\nname: example\ndescription: >\n  Reference example skill for skilldozer.\nmetadata:\n  keywords: [example, demo, skilldozer]\n  category: meta\n  aliases:\n    - ex\n    - demo\n---\n# body\n")
 	fm, _, err := ParseFrontmatter(path)
 	if err != nil {
 		t.Fatalf("ParseFrontmatter: %v", err)
@@ -181,11 +181,11 @@ func TestBuildSkillEndToEnd(t *testing.T) {
 	if s.Name != "example" {
 		t.Errorf("Name=%q; want example", s.Name)
 	}
-	if !strings.HasSuffix(s.Description, "Reference example skill for skpp.\n") {
-		t.Errorf("Description=%q; want folded scalar ending with '...skpp.\\n' (S1 verbatim contract)", s.Description)
+	if !strings.HasSuffix(s.Description, "Reference example skill for skilldozer.\n") {
+		t.Errorf("Description=%q; want folded scalar ending with '...skilldozer.\\n' (S1 verbatim contract)", s.Description)
 	}
-	if !strEq(s.Keywords, []string{"example", "demo", "skpp"}) {
-		t.Errorf("Keywords=%v; want [example demo skpp] (real []any path)", s.Keywords)
+	if !strEq(s.Keywords, []string{"example", "demo", "skilldozer"}) {
+		t.Errorf("Keywords=%v; want [example demo skilldozer] (real []any path)", s.Keywords)
 	}
 	if s.Category != "meta" {
 		t.Errorf("Category=%q; want meta", s.Category)

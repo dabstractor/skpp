@@ -1,17 +1,17 @@
-# Bash completion for skpp.
+# Bash completion for skilldozer.
 #
 # Install (one of):
-#   source /path/to/skpp/completions/skpp.bash
-#   cp completions/skpp.bash ~/.local/share/bash-completion/completions/skpp
-#   cp completions/skpp.bash /etc/bash_completion.d/skpp
+#   source /path/to/skilldozer/completions/skilldozer.bash
+#   cp completions/skilldozer.bash ~/.local/share/bash-completion/completions/skilldozer
+#   cp completions/skilldozer.bash /etc/bash_completion.d/skilldozer
 #
-# Tags are derived DYNAMICALLY from disk by calling `skpp --relative --all`
-# (skpp is manifest-free, PRD §2.1: there is no sidecar catalog to read).
+# Tags are derived DYNAMICALLY from disk by calling `skilldozer --relative --all`
+# (skilldozer is manifest-free, PRD §2.1: there is no sidecar catalog to read).
 #
 # LOCKSTEP: the flag set below is frozen to `main.go parseArgs()`. If a future
 # task adds/renames a flag there, update this list — and the zsh/fish files —
 # identically. There is no shared source of truth the shells can import.
-_skpp_completion() {
+_skilldozer_completion() {
     local cur prev words cword
     # _init_completion (from the bash-completion package) sets cur/prev/words/cword.
     # Fall back to COMP_WORDS manually when the package is absent (minimal Linux,
@@ -51,10 +51,10 @@ _skpp_completion() {
     done
 
     # Tags straight from the binary (canonical relTags, one per line). Errors
-    # swallowed: a missing/broken skpp degrades to "no tags" instead of spewing
+    # swallowed: a missing/broken skilldozer degrades to "no tags" instead of spewing
     # into the completion menu.
     local tags cands
-    tags=$(skpp --relative --all 2>/dev/null)
+    tags=$(skilldozer --relative --all 2>/dev/null)
     cands="$tags"
     (( have_pos == 0 )) && cands="$cands check"
     # SC2207 (mapfile preferred) is acceptable here: tags and flags never
@@ -62,4 +62,4 @@ _skpp_completion() {
     COMPREPLY=($(compgen -W "$cands" -- "$cur"))
     return 0
 }
-complete -F _skpp_completion skpp
+complete -F _skilldozer_completion skilldozer

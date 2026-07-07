@@ -33,7 +33,7 @@ var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
 //
 // It is the unmarshal target for the YAML block between the "---" fences. Unknown
 // keys are ignored by yaml.v3's default (lenient) decoder, matching pi's behavior.
-// The skpp conventions (keywords/category/aliases) live inside the standard,
+// The skilldozer conventions (keywords/category/aliases) live inside the standard,
 // spec-compliant Metadata map; S2 extracts them into typed fields on Skill.
 //
 // Field types follow the Agent Skills spec:

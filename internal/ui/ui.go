@@ -1,4 +1,4 @@
-// Package ui renders the human-readable skill catalog table for skpp's --list
+// Package ui renders the human-readable skill catalog table for skilldozer's --list
 // and --search modes (PRD §6.1). It is a PURE formatter: it takes a
 // []discover.Skill (already discovered and sorted by the caller — discover.Index
 // sorts by RelTag) and writes a TAG/NAME/DESCRIPTION table. Color is opt-in via a
@@ -16,7 +16,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/dabstractor/skpp/internal/discover"
+	"github.com/dabstractor/skilldozer/internal/discover"
 )
 
 // ANSI SGR escape sequences. Only emitted when useColor is true. The reset
@@ -29,14 +29,14 @@ const (
 )
 
 // descWrapWidth is the column width at which the DESCRIPTION cell is word-wrapped.
-// skpp deliberately does NOT detect terminal width: that needs a TIOCGWINSZ ioctl
+// skilldozer deliberately does NOT detect terminal width: that needs a TIOCGWINSZ ioctl
 // or golang.org/x/term, and PRD §4/§7.3 keep gopkg.in/yaml.v3 the ONLY third-party
 // dependency. A fixed width keeps output deterministic and testable and fits a
 // standard 80-column terminal alongside typical TAG/NAME widths.
 const descWrapWidth = 40
 
 // PrintList writes the TAG/NAME/DESCRIPTION catalog table for skills to w. It
-// implements PRD §6.1 `skpp --list`. skills MUST already be ordered the way rows
+// implements PRD §6.1 `skilldozer --list`. skills MUST already be ordered the way rows
 // should appear: discover.Index sorts by RelTag; --search passes its filtered
 // (still-sorted) slice. An empty slice prints nothing — main exits 1 "if no skills
 // found" before calling this (PRD §6.1); PrintList is defensive, not authoritative.
@@ -132,7 +132,7 @@ func PrintList(w io.Writer, skills []discover.Skill, useColor bool) {
 // bytes, 1 rune) or — (3 bytes, 1 rune) counts as one column instead of 2–4 bytes.
 // KNOWN LIMITATION: wide CJK runes that render two cells wide are still counted
 // as one; a full East-Asian width table would be needed for that, deliberately
-// avoided to keep skpp dependency-free (PRD §4/§7.3). See padRight for usage.
+// avoided to keep skilldozer dependency-free (PRD §4/§7.3). See padRight for usage.
 func displayWidth(s string) int {
 	return utf8.RuneCountInString(s)
 }

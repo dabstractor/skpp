@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dabstractor/skpp/internal/discover"
+	"github.com/dabstractor/skilldozer/internal/discover"
 )
 
 // mkSkill writes content to a temp skills/<relTag>/SKILL.md and returns the
