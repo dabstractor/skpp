@@ -175,14 +175,14 @@
               "type": "Task",
               "id": "P1.M2.T5",
               "title": "internal/discover — Index() walk (§7.1)",
-              "status": "Planned",
+              "status": "Complete",
               "description": "Walk the skills dir recursively and build the sorted skill index. A skill = any directory directly containing a SKILL.md (nested skills count). relTag is the dir path relative to the skills dir with OS separators normalized to `/`.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T5.S1",
                   "title": "WalkDir-based Index() + relTag normalization + sorting",
-                  "status": "Planned",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M2.T4.S2"
