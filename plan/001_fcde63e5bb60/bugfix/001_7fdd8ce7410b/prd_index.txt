@@ -1,0 +1,15 @@
+h1.0 Bug Fix Requirements
+ h2.0 Overview
+ h2.1 Critical Issues (Must Fix)
+ h2.2 Major Issues (Should Fix)
+  h3.0 Issue 1: --path does not report which discovery rule won
+ h2.3 Minor Issues (Nice to Fix)
+  h3.1 Issue 2: Multi-byte (unicode) tags misalign the --list / --search table
+  h3.2 Issue 3: .gitignore deviates from the PRD §16 specification
+  h3.3 Issue 4: --search does not match metadata.aliases or metadata.category
+  h3.4 Issue 5: Combined short flags and --flag=value are rejected
+  h3.5 Issue 6: Combining two listing modes silently picks one by dispatch order
+  h3.6 Issue 7: check cannot report "skill dir has no SKILL.md"
+ h2.4 Testing Summary
+---
+code:6 para:17 list:1
