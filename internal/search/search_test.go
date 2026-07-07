@@ -123,14 +123,23 @@ func TestSearchNoFrontmatterStillMatchesByTag(t *testing.T) {
 	}
 }
 
-func TestSearchDoesNotMatchCategoryOrAliases(t *testing.T) {
-	// PRD §6.1 scopes search to tag/name/description/keywords ONLY. Category and
-	// Aliases are on the struct but must NOT be searched.
-	in := []discover.Skill{
-		{RelTag: "x", Name: "n", Description: "d", Category: "secret-cat", Aliases: []string{"secret-alias"}, HasFM: true},
+func TestSearchMatchesCategoryAndAliases(t *testing.T) {
+	// PRD §10 states metadata.aliases/category "exist only to enrich skpp
+	// --search" — so aliases and category ARE searched (decisions.md §D4: §10
+	// wins over §6.1). This makes --search consistent with resolve, which
+	// resolves by alias (§7.2 step 4). Issue 4 fix: inverts the old
+	// TestSearchDoesNotMatchCategoryOrAliases that encoded the wrong behavior.
+	withAliases := []discover.Skill{
+		{RelTag: "x", Name: "n", Description: "d", Aliases: []string{"secret-alias"}, HasFM: true},
 	}
-	if out := Search("secret", in); len(out) != 0 {
-		t.Errorf("search must NOT match category/aliases (PRD §6.1 scope); got %+v", out)
+	if out := Search("secret-alias", withAliases); len(out) != 1 {
+		t.Errorf("search must match metadata.aliases: query %q got %+v", "secret-alias", out)
+	}
+	withCategory := []discover.Skill{
+		{RelTag: "x", Name: "n", Description: "d", Category: "secret-cat", HasFM: true},
+	}
+	if out := Search("secret-cat", withCategory); len(out) != 1 {
+		t.Errorf("search must match metadata.category: query %q got %+v", "secret-cat", out)
 	}
 }
 

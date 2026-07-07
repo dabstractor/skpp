@@ -68,14 +68,14 @@ EXAMPLES:
   skpp -f example              # print the SKILL.md path
   skpp --relative --all        # every skill path, relative to the skills dir
   skpp --list                  # human-readable catalog
-  skpp --search reddit         # substring search over tag/name/description/keywords
+  skpp --search reddit         # substring search over tag/name/description/keywords/aliases/category
   skpp check                   # validate every skill on disk
 
 OPTIONS:
   <tag> [<tag>...]   Resolve tags to skill directory paths (one absolute path per line)
   --all, -a          Print every skill's directory path, sorted by tag
   --list, -l         Human-readable catalog (TAG, NAME, DESCRIPTION)
-  --search <q>, -s   Substring search over tag / name / description / keywords
+  --search <q>, -s   Substring search over tag / name / description / keywords / aliases / category
   check              Validate every skill on disk (report OK / WARN / ERROR)
   --path, -p         Print the resolved skills directory
   --file, -f         Print the SKILL.md path instead of the directory (modifier)
@@ -128,7 +128,7 @@ type config struct {
 	file        bool     // --file / -f    : print the SKILL.md path instead of the dir path (§6.2)
 	relative    bool     // --relative     : print paths relative to the skills dir, not absolute (§6.2)
 	noColor     bool     // --no-color     : disable ANSI color even on a TTY (§6.2)
-	searchMode  bool     // --search <q>/-s : substring search over tag/name/description/keywords (§6.1)
+	searchMode  bool     // --search <q>/-s : substring search over tag/name/description/keywords/aliases/category (§10)
 	searchQ     string   // the --search query value (consumed from the token after --search/-s)
 	check       bool     // `skpp check` subcommand: validate every skill in the store (§9)
 	tags        []string // positional <tag> args (PRD §6.1 `skpp <tag> [<tag>...]`); resolved in run
@@ -314,9 +314,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 
-	// --search mode: `skpp --search <q>` / `-s <q>` (PRD §6.1). Filters the index to
+	// --search mode: `skpp --search <q>` / `-s <q>` (PRD §10). Filters the index to
 	// skills where <q> is a case-insensitive substring of the tag, frontmatter name,
-	// description, or any metadata keyword (internal/search), then renders the SAME
+	// description, any metadata keyword, any metadata alias, or the metadata category
+	// (internal/search), then renders the SAME
 	// table as --list via ui.PrintList (PRD §6.1: "same table format as --list,
 	// filtered"). The filtered slice keeps discover.Index's RelTag sort. Exit 0 with
 	// the table on matches; exit 1 (stderr message, EMPTY stdout) when nothing

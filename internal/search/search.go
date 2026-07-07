@@ -1,6 +1,7 @@
 // Package search filters a []discover.Skill by a case-insensitive substring
-// query over the four fields PRD §6.1 names for `skpp --search`: the tag, the
-// frontmatter name, the description, and each metadata keyword. It is a PURE
+// query over the six fields PRD §10 enriches for `skpp --search`: the tag, the
+// frontmatter name, the description, each metadata keyword, each metadata alias,
+// and the metadata category. It is a PURE
 // function over []discover.Skill: no filesystem, no globals, no I/O — main
 // (P1.M4.T9.S1) supplies the index from discover.Index and passes the filtered
 // (still-sorted) slice to ui.PrintList for the "same table format as --list"
@@ -19,8 +20,9 @@ import (
 )
 
 // Search returns every skill in skills for which query is a case-insensitive
-// substring of ANY of the four PRD §6.1 fields: RelTag (the tag), Name
-// (frontmatter name), Description, or any element of Keywords. Input order is
+// substring of ANY of six fields: RelTag (the tag), Name (frontmatter name),
+// Description, any Keyword, any Alias, or Category (PRD §10: keywords/category/
+// aliases "exist only to enrich skpp --search"). Input order is
 // preserved: discover.Index sorts []Skill by RelTag, and ui.PrintList does NOT
 // re-sort, so the filtered slice is displayed already-sorted.
 //
@@ -48,10 +50,12 @@ func Search(query string, skills []discover.Skill) []discover.Skill {
 // substring of any searchable field of s. q is lowercased once by the caller
 // (Search); each field is lowercased lazily inside Contains.
 //
-// Field scope is EXACTLY the four PRD §6.1 fields. It deliberately does NOT
-// include Category or Aliases — both exist on discover.Skill and would be a
-// tempting (but spec-violating) addition. PRD §6.1: "tag, frontmatter name,
-// description, and metadata.keywords".
+// Field scope is SIX fields: RelTag, Name, Description, each Keyword, each
+// Alias, and Category. PRD §10 states keywords/category/aliases "exist only to
+// enrich skpp --search" — so aliases and category ARE searched (decisions.md
+// §D4: §10 wins over §6.1's summary field list). This makes --search consistent
+// with resolve, which resolves by alias (§7.2 step 4). Aliases are matched
+// INDIVIDUALLY (see the Keywords note below) for the same boundary-safety reason.
 //
 // Keywords are tested INDIVIDUALLY (not strings.Join'd): a query spanning a
 // boundary between two keywords must not match (joining would create false
@@ -70,6 +74,19 @@ func matches(q string, s discover.Skill) bool {
 		if strings.Contains(strings.ToLower(kw), q) {
 			return true
 		}
+	}
+	// Aliases (metadata.aliases) — matched INDIVIDUALLY, same boundary-safety
+	// as Keywords: a query spanning two aliases must not match. PRD §10 says
+	// aliases "exist only to enrich skpp --search"; this also makes --search
+	// consistent with resolve, which resolves by alias (§7.2 step 4).
+	for _, a := range s.Aliases {
+		if strings.Contains(strings.ToLower(a), q) {
+			return true
+		}
+	}
+	// Category (metadata.category) — a single scalar field (PRD §10).
+	if strings.Contains(strings.ToLower(s.Category), q) {
+		return true
 	}
 	return false
 }
