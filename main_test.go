@@ -179,8 +179,8 @@ func TestRunPathSuccess(t *testing.T) {
 	if got := out.String(); got != want {
 		t.Errorf("run(--path) stdout=%q; want %q (byte-exact dir + newline)", got, want)
 	}
-	if errOut.Len() != 0 {
-		t.Errorf("run(--path) success stderr=%q; want empty", errOut.String())
+	if got, want := errOut.String(), "(found via SKPP_SKILLS_DIR)\n"; got != want {
+		t.Errorf("run(--path) success stderr=%q; want %q (Issue 1 source label)", got, want)
 	}
 }
 
@@ -194,6 +194,30 @@ func TestRunPathShortFlag(t *testing.T) {
 	}
 	if got := out.String(); got != filepath.Clean(dir)+"\n" {
 		t.Errorf("run(-p) stdout=%q; want %q", got, filepath.Clean(dir)+"\n")
+	}
+	if got, want := errOut.String(), "(found via SKPP_SKILLS_DIR)\n"; got != want {
+		t.Errorf("run(-p) stderr=%q; want %q (Issue 1 source label)", got, want)
+	}
+}
+
+// Issue 1 (QA): --path must report which §8 rule won to stderr, while stdout
+// stays byte-exact so the §13 `test "$(./skpp --path)" = "$PWD/skills"` gate
+// still passes. The env case is deterministic; sibling/walk-up are covered by
+// skillsdir.TestSourceString.
+func TestRunPathReportsSourceLabel(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("SKPP_SKILLS_DIR", dir) // rule 1 wins -> SourceEnv
+	var out, errOut bytes.Buffer
+	if code := run([]string{"--path"}, &out, &errOut); code != 0 {
+		t.Fatalf("run(--path): code=%d; want 0", code)
+	}
+	// stdout: byte-exact dir + newline (§13 contract preserved).
+	if got, want := out.String(), filepath.Clean(dir)+"\n"; got != want {
+		t.Errorf("--path stdout=%q; want %q", got, want)
+	}
+	// stderr: the SourceEnv label, exactly, nothing else.
+	if got, want := errOut.String(), "(found via SKPP_SKILLS_DIR)\n"; got != want {
+		t.Errorf("--path stderr=%q; want %q", got, want)
 	}
 }
 

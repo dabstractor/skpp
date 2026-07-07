@@ -266,7 +266,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	//    check+tags/check+mode).
 
 	if c.path {
-		dir, _, err := skillsdir.Find() // src is for reporting only; not printed
+		dir, src, err := skillsdir.Find()
 		if err != nil {
 			// Find() returns skillsdir.ErrNotFound whose message is the
 			// user-facing one-line fix (PRD §8.4/§6.4). Print it verbatim to
@@ -274,9 +274,14 @@ func run(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintln(stderr, err)
 			return 1
 		}
-		// Byte-exact: ONLY the dir + newline. The §13 acceptance gate
-		// `test "$(./skpp --path)" = "$PWD/skills"` depends on this.
+		// Byte-exact: ONLY the dir + newline on stdout. The §13 acceptance gate
+		// `test "$(./skpp --path)" = "$PWD/skills"` depends on this — $() captures
+		// stdout only, so the stderr label below does NOT break it.
 		fmt.Fprintln(stdout, dir)
+		// Issue 1 (QA): report which §8 discovery rule won, to stderr. A typo'd
+		// SKPP_SKILLS_DIR silently falls through to sibling/walk-up; this label
+		// makes that visible without polluting stdout. Labels from Source.String().
+		fmt.Fprintf(stderr, "(found via %s)\n", src)
 		return 0
 	}
 
