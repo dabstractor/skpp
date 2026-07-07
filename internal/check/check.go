@@ -122,11 +122,16 @@ const (
 // are skipped to avoid noise). Field checks run only when fm.HasFM && err == nil.
 //
 // check does NOT scan for "directories that lack SKILL.md but look like skills":
-// discover.Index only emits dirs that CONTAIN a SKILL.md, and a heuristic for the
-// gap would false-positive on legitimate grouping dirs (research §2). The §9
-// "empty besides SKILL.md" WARN is intentionally NOT implemented (research §3):
-// the shipped example skill IS only SKILL.md, and enabling it would break the
-// §13 acceptance ("reports the example as OK").
+// discover.Index only emits dirs that CONTAIN a SKILL.md, so the §9 "skill dir
+// has no SKILL.md" rule can never fire — a grouping dir without SKILL.md is never
+// indexed, never inspected. A heuristic for the gap would false-positive on
+// legitimate grouping dirs (research §2). The §9 rule's actionable form is
+// therefore REFRAMED below as the "invalid SKILL.md frontmatter" ERROR (the
+// perr != nil branch): an unusable/malformed SKILL.md is the closest reachable
+// condition to "no usable SKILL.md". The §9 "empty besides SKILL.md" WARN is
+// intentionally NOT implemented (research §3): the shipped example skill IS only
+// SKILL.md, and enabling it would break the §13 acceptance ("reports the
+// example as OK").
 func Check(skills []discover.Skill) Report {
 	var rep Report
 	rep.BySkill = make([]SkillReport, len(skills))

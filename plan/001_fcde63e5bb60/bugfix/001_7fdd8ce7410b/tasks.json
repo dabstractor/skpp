@@ -4,7 +4,7 @@
       "type": "Phase",
       "id": "P1",
       "title": "QA Bug Fix Remediation",
-      "status": "Planned",
+      "status": "Researching",
       "description": "Remediate the findings from the end-to-end QA pass against the skpp PRD. One Major issue (discovery source not surfaced in --path) and six Minor issues (unicode table alignment, .gitignore deviation, search field inconsistency, combined-flag parsing, listing-mode exclusivity, check rule documentation). All core contracts (path resolution, exit codes, stdout discipline, atomicity, discovery priority) are confirmed working; this phase addresses the surfaced gaps only.",
       "milestones": [
         {
@@ -162,7 +162,7 @@
           "type": "Milestone",
           "id": "P1.M5",
           "title": "Spec Alignment & Documentation",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Resolve Issues 3 and 7 (both Minor), plus the changeset-level documentation sweep (Mode B). Issue 3 aligns .gitignore with PRD §16. Issue 7 confirms the deliberate omission of the check 'no SKILL.md' rule needs no code change. The final task syncs README.md and overview docs to reflect the full changeset.",
           "tasks": [
             {
@@ -192,14 +192,14 @@
               "type": "Task",
               "id": "P1.M5.T2",
               "title": "Confirm check 'no SKILL.md' rule documentation",
-              "status": "Ready",
+              "status": "Complete",
               "description": "Issue 7 is effectively moot: the §9 'skill dir has no SKILL.md' rule cannot fire because discover.Index only emits directories that contain SKILL.md. The check.go code already documents this as deliberate. Verify the comment is accurate and complete; no code change is required or desired (a heuristic would false-positive on legitimate grouping directories).",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M5.T2.S1",
                   "title": "Verify check.go omission rationale is accurately documented",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See architecture/issue_analysis.md §Issue 7 and decisions.md §D7. check.go:123-129 already documents WHY the §9 'skill dir has no SKILL.md' rule is not implemented: discover.Index (index.go:46) defines a skill as 'any directory that directly contains SKILL.md' — a grouping dir without SKILL.md is simply never indexed, never checked. The §9 rule is REFRAMED in check.go:150 as 'invalid SKILL.md frontmatter' (an unreadable/malformed file is the actionable version). A heuristic (e.g. flagging dirs with scripts/ but no SKILL.md) would false-positive on legitimate grouping dirs.\n2. INPUT: The existing check.go doc comment (lines 123-129) and the check.go:150-151 reframed ERROR.\n3. LOGIC: Read check.go:123-129 and verify the comment accurately explains: (a) why the rule cannot fire (Index only emits dirs with SKILL.md), (b) why a heuristic is rejected (false-positives on grouping dirs), (c) that the rule is reframed as 'invalid SKILL.md frontmatter' (check.go:150). If the comment is already complete and accurate, NO code change is needed — this subtask is a verification gate that confirms the decision is documented. If the comment is unclear or incomplete, refine it ONLY to improve clarity (do not add code).\n4. OUTPUT: The check.go rationale comment is confirmed accurate (or clarified). No behavioral change. The §13 acceptance gate (`skpp check` reports example as OK) must still pass.\n5. TESTS: Run `go test ./internal/check/` and verify all pass. Run `./skpp check` and verify the example skill reports OK. No new tests needed.\n6. DOCS: [Mode A] The check.go comment IS the documentation for this decision. If clarified, the clarification rides with this subtask.",
@@ -215,14 +215,14 @@
               "type": "Task",
               "id": "P1.M5.T3",
               "title": "Sync changeset-level documentation",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Mode B final documentation sweep: update README.md and any overview docs to reflect the full changeset. This task depends on ALL implementing subtasks so it runs last and captures the coherent delta.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M5.T3.S1",
                   "title": "Update README.md to reflect --path source reporting and search field expansion",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1",

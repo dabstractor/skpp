@@ -3,3 +3,8 @@
 *.test
 *.out
 .DS_Store
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
