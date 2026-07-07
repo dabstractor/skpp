@@ -4,7 +4,7 @@
       "type": "Phase",
       "id": "P1",
       "title": "QA Bug Fix Remediation",
-      "status": "Researching",
+      "status": "Complete",
       "description": "Remediate the findings from the end-to-end QA pass against the skpp PRD. One Major issue (discovery source not surfaced in --path) and six Minor issues (unicode table alignment, .gitignore deviation, search field inconsistency, combined-flag parsing, listing-mode exclusivity, check rule documentation). All core contracts (path resolution, exit codes, stdout discipline, atomicity, discovery priority) are confirmed working; this phase addresses the surfaced gaps only.",
       "milestones": [
         {
@@ -162,7 +162,7 @@
           "type": "Milestone",
           "id": "P1.M5",
           "title": "Spec Alignment & Documentation",
-          "status": "Researching",
+          "status": "Complete",
           "description": "Resolve Issues 3 and 7 (both Minor), plus the changeset-level documentation sweep (Mode B). Issue 3 aligns .gitignore with PRD §16. Issue 7 confirms the deliberate omission of the check 'no SKILL.md' rule needs no code change. The final task syncs README.md and overview docs to reflect the full changeset.",
           "tasks": [
             {
@@ -215,14 +215,14 @@
               "type": "Task",
               "id": "P1.M5.T3",
               "title": "Sync changeset-level documentation",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Mode B final documentation sweep: update README.md and any overview docs to reflect the full changeset. This task depends on ALL implementing subtasks so it runs last and captures the coherent delta.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M5.T3.S1",
                   "title": "Update README.md to reflect --path source reporting and search field expansion",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1",

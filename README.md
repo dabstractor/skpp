@@ -128,7 +128,7 @@ skpp example writing/reddit
 
 # Human-readable catalog and substring search
 skpp --list
-skpp --search reddit
+skpp --search reddit            # matches tag / name / description / keywords / aliases / category
 
 # Print every skill path, sorted by tag
 skpp --all
@@ -136,8 +136,8 @@ skpp --all
 # Validate every skill on disk
 skpp check
 
-# Where is the resolved skills directory?
-skpp --path                        # → /…/skills
+# Where is the resolved skills directory? (its discovery rule prints to stderr)
+skpp --path                        # → /…/skills (stderr: found via sibling of binary)
 
 # Print paths relative to the skills directory instead of absolute
 skpp --relative example
@@ -147,13 +147,17 @@ skpp --no-color --list
 
 # Version is the git-describe value (dynamic, not a fixed string)
 skpp --version
+
+# Short flags combine (-af) and long flags accept --flag=value (--search=reddit)
 ```
 
 **Error contract.** An unknown tag prints **nothing** to stdout and exits 1
 (the error goes to stderr only). That is why
 `pi --skill "$(skpp badtag)"` fails loudly instead of loading nothing. When
 multiple tags are given, any unresolved tag causes nothing to be printed and
-exit 1, so `pi` never sees a partial result.
+exit 1, so `pi` never sees a partial result. The listing modes `--path`,
+`--list`, `--search`, and `--all` are mutually exclusive — combining any two
+exits 2.
 
 `skpp --help` lists every flag.
 
@@ -240,7 +244,11 @@ OK    example (example)
    (`go run .` / running `./skpp` from a checkout).
 4. **Else: fail with a one-line fix** telling you how to set `SKPP_SKILLS_DIR`.
 
-`skpp --path` reports which directory won.
+`skpp --path` reports the winning directory on stdout and the matching rule on
+stderr — one of `SKPP_SKILLS_DIR`, `sibling of binary`, or `ancestor of cwd`.
+The stderr label matters when `SKPP_SKILLS_DIR` is typo'd: a bad value is
+silently ignored and discovery falls through to the sibling / walk-up rule, so
+the `(found via …)` line is the only way to tell the env var was skipped.
 
 ## Constraints
 
