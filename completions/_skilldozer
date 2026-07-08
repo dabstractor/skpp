@@ -28,23 +28,29 @@ _skilldozer() {
         '--relative[Print paths relative to the skills directory]'
         '--no-color[Disable ANSI color]'
         # `:query:` marks --search/-s as value-taking, so zsh routes the value
-        # slot away from $state (no tag completion after them).
+        # slot away from $state (no tag completion after them). NO completion is
+        # offered for the search value (free-text query).
         '--search[Substring search over tag/name/description/keywords]:query:'
         '-s[Substring search over tag/name/description/keywords]:query:'
+        # `:directory:_files` routes --store's value slot to file/path completion
+        # (directories). No short form. (The OPPOSITE of --search: --store WANTS
+        # path completion; --search offers nothing.)
+        '--store[Non-interactive store path for init]:directory:_files'
     )
 
     _arguments -C "$flags[@]" '1: :->first' '*: :->rest' && return 0
 
     case "$state" in
         first)
-            # check is offered ONLY as the first positional token.
-            compadd -- "$tags[@]" check
+            # check AND init are offered ONLY as the first positional token.
+            compadd -- "$tags[@]" check init
             ;;
         rest)
-            # `check` is exclusive (PRD §6.3: check+tags → exit 2). Once seen,
-            # suppress tags so completion never invites a guaranteed error.
-            if (( ${words[(I)check]} )); then
-                _message 'check takes no further arguments'
+            # `check` AND `init` are exclusive (PRD §6.3: either+tags → exit 2).
+            # Once one is seen, suppress tags so completion never invites a
+            # guaranteed error.
+            if (( ${words[(I)check]} || ${words[(I)init]} )); then
+                _message 'subcommand takes no tag arguments'
             else
                 compadd -- "$tags[@]"
             fi

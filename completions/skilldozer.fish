@@ -31,12 +31,21 @@ complete -c skilldozer       -l no-color -d 'Disable ANSI color'
 # completion hint; skilldozer itself enforces that --search needs a value, exit 1.)
 complete -c skilldozer -s s -l search -d 'Substring search over tag/name/description/keywords'
 
-# `check` is an EXCLUSIVE subcommand (PRD §6.3). Offer it only as the first arg.
+# --store <dir> (PRD §8.2): Non-interactive store path for init. Unlike --search,
+# --store's value is a DIRECTORY, so here we DO pass `-r`: in fish 4.x `-r`
+# switches into "complete the option's value" mode, which BYPASSES the global
+# `-f` above and offers file/dir paths for the value. This is the intentional
+# INVERSE of --search's no-`-r` (free-text -> offer nothing). No short form.
+complete -c skilldozer -l store -d 'Non-interactive store path for init' -r
+
+# `check` AND `init` are EXCLUSIVE subcommands (PRD §6.3). Offer them only as
+# the first arg.
 complete -c skilldozer -n '__fish_is_first_arg' -a 'check' -d 'Validate every skill on disk'
+complete -c skilldozer -n '__fish_is_first_arg' -a 'init' -d 'First-run setup: pick/create the skills store and write the config'
 
 # Dynamic tags: ONE directive with command substitution (NOT a hardcoded line per
 # tag — the store is manifest-free and changes as skills are added). Suppressed
-# once `check` is seen (exclusive subcommand, PRD §6.3) AND when the previous
-# arg is --search/-s (free-text query — no tag completion there either).
-complete -c skilldozer -n 'not __fish_seen_subcommand_from check; and not __fish_prev_arg_in --search -s' \
+# once `check` OR `init` is seen (exclusive subcommand, PRD §6.3) AND when the
+# previous arg is --search/-s (free-text query — no tag completion there either).
+complete -c skilldozer -n 'not __fish_seen_subcommand_from check init; and not __fish_prev_arg_in --search -s' \
     -a '(skilldozer --relative --all 2>/dev/null)' -d 'skill tag'

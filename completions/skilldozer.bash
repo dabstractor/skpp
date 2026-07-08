@@ -26,26 +26,30 @@ _skilldozer_completion() {
         COMPREPLY=()
     }
 
-    # --search / -s take a free-text query: offer nothing (no tag completion).
+    # Value-taking flags: route the value slot away from tag completion.
+    #   --search/-s  -> free-text query  -> offer NOTHING (return 0 with empty COMPREPLY).
+    #   --store      -> directory value  -> complete DIRECTORIES via compgen -d.
+    # (--store WANTS path completion, unlike --search's free-text -> nothing.)
     case "$prev" in
         --search|-s) return 0 ;;
+        --store) COMPREPLY=($(compgen -d -- "$cur")); return 0 ;;
     esac
 
     # Flag completion when the current token starts with '-'.
     if [[ "$cur" == -* ]]; then
         COMPREPLY=($(compgen -W \
-            "--version -v --help -h --path -p --list -l --all -a --file -f --relative --no-color --search -s" \
+            "--version -v --help -h --path -p --list -l --all -a --file -f --relative --no-color --search -s --store" \
             -- "$cur"))
         return 0
     fi
 
-    # Walk earlier words: `check` is an EXCLUSIVE subcommand (PRD §6.3 —
-    # check+tags → exit 2), so once it appears, offer nothing further. Track
-    # whether any non-flag positional was seen so `check` is only ever offered
+    # Walk earlier words: `check` AND `init` are EXCLUSIVE subcommands (PRD §6.3 —
+    # either +tags → exit 2), so once one appears, offer nothing further. Track
+    # whether any non-flag positional was seen so they are only ever offered
     # as the FIRST positional token.
     local i have_pos=0
     for ((i=1; i<cword; i++)); do
-        [[ "${words[i]}" == "check" ]] && return 0
+        [[ "${words[i]}" == "check" || "${words[i]}" == "init" ]] && return 0
         [[ "${words[i]}" == -* ]] && continue
         have_pos=1
     done
@@ -56,7 +60,7 @@ _skilldozer_completion() {
     local tags cands
     tags=$(skilldozer --relative --all 2>/dev/null)
     cands="$tags"
-    (( have_pos == 0 )) && cands="$cands check"
+    (( have_pos == 0 )) && cands="$cands check init"
     # SC2207 (mapfile preferred) is acceptable here: tags and flags never
     # contain spaces, so word-splitting is safe.
     COMPREPLY=($(compgen -W "$cands" -- "$cur"))

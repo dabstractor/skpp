@@ -210,7 +210,7 @@
           "type": "Milestone",
           "id": "P1.M3",
           "title": "Asset & completion drift sync — example skill (§11) and shell completions (§14)",
-          "status": "Researching",
+          "status": "Complete",
           "description": "Depends on M2 (completions add init/--store, so the feature surface must exist). Two independent tasks: fix the residual skpp references in the one shipped example skill (also fixes an inverted --search), and add init + --store to the bash/zsh/fish completions. .gitignore, LICENSE, go.mod, and install.sh are already compliant (verified in architecture/docs_and_assets_drift.md) — no task; they are re-confirmed in the final acceptance gate.",
           "tasks": [
             {
@@ -240,14 +240,14 @@
               "type": "Task",
               "id": "P1.M3.T2",
               "title": "Add init subcommand + --store flag to bash/zsh/fish completions (PRD §14)",
-              "status": "Researching",
+              "status": "Complete",
               "description": "All three completion files complete only `check` as a subcommand and omit --store. Add init alongside check (same first-positional, exclusive treatment) and add --store to the flag matrix, lockstep across all three files. Keep the existing tag source (skilldozer --relative --all) — it is a defensible, functionally-better deviation from the literal §14 `--all`.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T2.S1",
                   "title": "Add init + --store to completions/skilldozer.bash, _skilldozer, skilldozer.fish",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M2.T1.S1"
@@ -275,14 +275,14 @@
               "type": "Task",
               "id": "P1.M4.T1",
               "title": "Run the full PRD §13 acceptance suite and confirm compliant files",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Execute the verbatim §13 acceptance script (build, version, discovery/path, --list, tag resolution, -f, unknown-tag contract, absolute-path contract, check, the pi --no-skills --skill integration, symlink install resolve-back-to-repo, env override, the unconfigured-hint gate, non-interactive init, config-rule-wins, env-beats-config). All must pass. Also re-verify .gitignore (5 entries), LICENSE (MIT), go.mod (module + go directive + single dep), and install.sh (ldflags + symlink + verify) are still compliant.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M4.T1.S1",
                   "title": "Execute §13 acceptance end to end and remediate any failure",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T2.S2",
