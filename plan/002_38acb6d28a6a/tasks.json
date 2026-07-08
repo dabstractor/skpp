@@ -210,21 +210,21 @@
           "type": "Milestone",
           "id": "P1.M3",
           "title": "Asset & completion drift sync — example skill (§11) and shell completions (§14)",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Depends on M2 (completions add init/--store, so the feature surface must exist). Two independent tasks: fix the residual skpp references in the one shipped example skill (also fixes an inverted --search), and add init + --store to the bash/zsh/fish completions. .gitignore, LICENSE, go.mod, and install.sh are already compliant (verified in architecture/docs_and_assets_drift.md) — no task; they are re-confirmed in the final acceptance gate.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M3.T1",
               "title": "Fix the shipped example skill — skpp -> skilldozer (PRD §11)",
-              "status": "Researching",
+              "status": "Complete",
               "description": "skills/example/SKILL.md still says skpp in 7 places (description, keywords, body). This is the only non-plan file with literal skpp residue, and it functionally inverts --search (keyword skpp matches while skilldozer does not). Conform it to PRD §11 verbatim.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T1.S1",
                   "title": "Rewrite skills/example/SKILL.md to match PRD §11 (skilldozer wording + keywords)",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See architecture/docs_and_assets_drift.md §1 — current file skills/example/SKILL.md lines 4,5,7,13,18,19,20 say skpp. PRD §11 gives the exact canonical content. Keep frontmatter `name: example` and `category: meta` unchanged (already correct). This is also the source of truth for the compiled-in seed template used by P1.M2.T2.S2 — keep them identical.\n2. INPUT: PRD §11 (the example skill block). The discover/search/check packages consume this file's frontmatter (name/description/keywords).\n3. LOGIC: Replace the 7 skpp occurrences with skilldozer: description -> 'Reference example skill for skilldozer. Demonstrates the required frontmatter and how skilldozer resolves a tag to an absolute path. Safe to delete once you add real skills.'; `metadata.keywords: [example, demo, skilldozer]`; body line 'This skill exists only so `skilldozer` has something to resolve.'; the three try-commands using `skilldozer example`, `skilldozer -f example`, `pi --skill \"$(skilldozer example)\"`. Match PRD §11 byte-for-byte (whitespace/frontmatter style included). Do NOT change name/category/license.\n4. OUTPUT: skills/example/SKILL.md compliant with §11. Verified by: `./skilldozer check` still reports OK example; `./skilldozer --search skilldozer` now matches (and `--search skpp` no longer matches); `./skilldozer example` still resolves. (If P1.M2.T2.S2's compiled-in template was written before this fix, re-sync the constant to this exact text.)\n5. DOCS: [Mode A] This file IS the user-facing example asset and its body doubles as inline documentation — updating it in this subtask satisfies the doc-with-work rule. No separate doc subtask.",
@@ -240,14 +240,14 @@
               "type": "Task",
               "id": "P1.M3.T2",
               "title": "Add init subcommand + --store flag to bash/zsh/fish completions (PRD §14)",
-              "status": "Planned",
+              "status": "Researching",
               "description": "All three completion files complete only `check` as a subcommand and omit --store. Add init alongside check (same first-positional, exclusive treatment) and add --store to the flag matrix, lockstep across all three files. Keep the existing tag source (skilldozer --relative --all) — it is a defensible, functionally-better deviation from the literal §14 `--all`.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T2.S1",
                   "title": "Add init + --store to completions/skilldozer.bash, _skilldozer, skilldozer.fish",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M2.T1.S1"

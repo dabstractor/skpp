@@ -1,21 +1,21 @@
 ---
 name: example
 description: >
-  Reference example skill for skpp. Demonstrates the required frontmatter and
-  how skpp resolves a tag to an absolute path. Safe to delete once you add real skills.
+  Reference example skill for skilldozer. Demonstrates the required frontmatter and
+  how skilldozer resolves a tag to an absolute path. Safe to delete once you add real skills.
 metadata:
-  keywords: [example, demo, skpp]
+  keywords: [example, demo, skilldozer]
   category: meta
 ---
 
 # Example Skill
 
-This skill exists only so `skpp` has something to resolve.
+This skill exists only so `skilldozer` has something to resolve.
 
 Try:
 
 ```bash
-skpp example                       # prints this directory's absolute path
-skpp -f example                    # prints .../skills/example/SKILL.md
-pi --skill "$(skpp example)"       # loads this skill into pi
+skilldozer example                       # prints this directory's absolute path
+skilldozer -f example                    # prints .../skills/example/SKILL.md
+pi --skill "$(skilldozer example)"       # loads this skill into pi
 ```
