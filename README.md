@@ -198,6 +198,15 @@ Tag resolution tries, in order:
 So `skilldozer example`, `skilldozer writing/reddit`, `skilldozer reddit` (if unique), and
 `skilldozer foo-helper` (matching a frontmatter `name`) all resolve.
 
+**Reserved tag names.** `check` and `init` are subcommand names, so they never resolve as
+skill tags: `skilldozer check` runs validation and `skilldozer init` runs first-run setup.
+That is the standard CLI rule — a subcommand name takes precedence over a positional
+argument. A skill whose canonical tag collides (`skills/check/SKILL.md`, tag `check`) is
+still fully usable, just not via that one tag: it appears in `--list` and `--all`, and
+resolves by a nested path (`writing/check`), by its frontmatter `name`, or by a declared
+alias. To point `init` at a store directory literally named `check` or `init`, pass it with
+`--store` rather than as a positional argument.
+
 ## Adding a skill
 
 Drop a directory under `skills/` with a `SKILL.md` whose frontmatter declares

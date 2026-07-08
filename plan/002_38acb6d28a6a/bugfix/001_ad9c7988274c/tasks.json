@@ -4,7 +4,7 @@
       "type": "Phase",
       "id": "P1",
       "title": "QA Bugfix Round — stdout discipline, flag-parse safety, exclusivity & repo hygiene",
-      "status": "Planned",
+      "status": "Ready",
       "description": "Fix the 7 issues surfaced by the end-to-end creative-QA pass against PRD §6/§8/§16. Two Major (init writes check report to stdout; init --store with no value silently overwrites the config) and five Minor (tag+--path not rejected; init init not rejected; tilde not expanded in init paths; .gitignore drifts from §16; check/init reserved tags undocumented). All fixes preserve the load-bearing §6.4 stdout-discipline and atomic-resolution contracts and stay stdlib-only besides yaml.v3. Research validated against the built binary at HEAD 414758d; findings in plan/002_38acb6d28a6a/bugfix/001_ad9c7988274c/architecture/.",
       "milestones": [
         {
@@ -85,7 +85,7 @@
           "type": "Milestone",
           "id": "P1.M2",
           "title": "Minor bugfixes — exclusivity corners, init dedup, tilde expansion, gitignore hygiene, reserved-tag docs",
-          "status": "Ready",
+          "status": "Complete",
           "description": "Fix the five Minor issues. Issue 3: tag+--path must exit 2 like tag+--list. Issue 4: init init must exit 2 like init check. Issue 5: init/interactive/--store paths must expand a leading ~ to $HOME before filepath.Abs. Issue 6: .gitignore trimmed to the exact PRD §16 5-entry set. Issue 7: document that check/init are reserved tags (no code change).",
           "tasks": [
             {
@@ -205,14 +205,14 @@
               "type": "Task",
               "id": "P1.M2.T5",
               "title": "Document that check/init are reserved tags (Issue 7)",
-              "status": "Ready",
+              "status": "Complete",
               "description": "A skill whose canonical tag is literally check or init cannot be resolved by that tag because parseArgs treats check/init as reserved subcommand tokens. The code documents this as deliberate. This is a documentation-only fix: surface the reservation and the workarounds in the README skill-tag section. No code change (a code change would silently shadow the check/init subcommands — a worse UX surprise).",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T5.S1",
                   "title": "Add a reserved-tag names note to the README skill-tag section",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See architecture/bug_fixes_validation.md §ISSUE 7 and architecture/decisions.md §D6. parseArgs `case \"check\"` (main.go:247) and `case \"init\"` (main.go:268) reserve those tokens BEFORE the default tag-capture branch (main.go:281); the reservation is already commented as deliberate in code. Prior-round §D7 set the 'no code change; documentation-only' precedent. The decision is recorded in architecture/decisions.md §D6. PRD.md is human-owned/READ-ONLY — do NOT edit PRD.md (the §7.2 note the PRD suggests is a human action item recorded in decisions.md, not executed here).\n2. INPUT: the README skill-tag section (README.md 'Where skills live' ~line 180+, which defines the canonical tag as the skill dir's path relative to skills/).\n3. LOGIC: Add a short 'Reserved tag names' note to the README skill-tag section stating that `check` and `init` are reserved subcommand names (§8.2, §9) and are never treated as skill tags, and listing the workarounds: a skill at skills/check/SKILL.md is still discoverable by --list/--all, by a NESTED path (e.g. writing/check), by its frontmatter name, or by an alias — but cannot be resolved via `skilldozer check` / `skilldozer init`. Frame it as the standard CLI subcommand-reservation rule. Keep it concise and consistent with the existing README voice. No code change; no PRD.md edit. No external services to mock.\n4. OUTPUT: README documents the reserved-tag rule and workarounds. Consumed by: users reading the README and by the final Mode B consistency sweep (P1.M3.T1).\n5. DOCS: [Mode A] This subtask's entire deliverable IS a doc edit (README skill-tag section). It is the per-feature doc (Mode A) for Issue 7; the final Mode B sweep (P1.M3.T1) verifies README consistency across all 7 fixes but does not duplicate this note.",
@@ -231,21 +231,21 @@
           "type": "Milestone",
           "id": "P1.M3",
           "title": "Changeset-level documentation sync",
-          "status": "Planned",
+          "status": "Ready",
           "description": "Mode B sweep: ensure README.md and any overview doc reflect the whole changeset coherently after all implementing subtasks land. The per-subtask Mode A doc edits handle inline comments and the directly-touched sections; this final task verifies README consistency across the stdout-contract change (Issue 1), the new --store exit-2 behavior (Issue 2), tags+--path exclusivity (Issue 3), and tilde support in init (Issue 5).",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M3.T1",
               "title": "Sync changeset-level documentation (README + overview)",
-              "status": "Planned",
+              "status": "Ready",
               "description": "Sweep README.md for changeset-level coherence: init output contract (stdout = store path only; check report on stderr), the --store-missing-value exit-2 rule, tags+--path mutual exclusion, and ~ expansion in init paths. Verify the reserved-tag note from P1.M2.T5.S1 reads consistently with the error-contract section. This runs LAST and depends on every implementing subtask.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T1.S1",
                   "title": "Sweep README.md init/error-contract sections for the changeset delta",
-                  "status": "Planned",
+                  "status": "Ready",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1",
