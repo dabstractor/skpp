@@ -1390,6 +1390,22 @@ func TestParseArgsInitDirNotCapturedAsTag(t *testing.T) {
 	}
 }
 
+// Issue 4 (P1.M2.T2.S1): a duplicate reserved `init` token is captured into c.tags
+// (not swallowed, not used as the store) so exclusivityError's init+tags branch
+// rejects `init init` with exit 2. A literal store dir named "init" must use --store.
+func TestParseArgsInitInitCapturedAsTag(t *testing.T) {
+	c := parseArgs([]string{"init", "init"})
+	if !c.init {
+		t.Errorf("parseArgs(init init): init=false; want true")
+	}
+	if len(c.tags) != 1 || c.tags[0] != "init" {
+		t.Errorf("parseArgs(init init): tags=%v; want [init] (duplicate init captured as a tag)", c.tags)
+	}
+	if c.initStore != "" {
+		t.Errorf("parseArgs(init init): initStore=%q; want empty (init is NOT a store dir)", c.initStore)
+	}
+}
+
 // --- run: `skilldozer check` (P1.M4.T10.S1) ---
 
 // Clean store -> one OK line per skill + summary, exit 0, no ANSI, empty stderr.
@@ -1918,6 +1934,30 @@ func TestRunExclusivityInitAndStrayTag(t *testing.T) {
 	}
 	if !strings.Contains(errOut.String(), "tag") {
 		t.Errorf("stderr=%q; want a message mentioning tag", errOut.String())
+	}
+}
+
+// Issue 4 (P1.M2.T2.S1): `init init` now exits 2 (was 0, config written). The
+// duplicate `init` is captured as a tag, so exclusivityError's init+tags branch
+// fires (the same path `init foo bar` uses). exclusivity runs at run() step 5,
+// BEFORE runInit/config.Save (step 6), so exit 2 guarantees the config is NOT written.
+func TestRunExclusivityInitInit(t *testing.T) {
+	cfg := filepath.Join(t.TempDir(), "must-not-exist.yaml")
+	t.Setenv("SKILLDOZER_CONFIG", cfg)
+	var out, errOut bytes.Buffer
+	code := run([]string{"init", "init"}, &out, &errOut)
+	if code != 2 {
+		t.Fatalf("run(init init): code=%d; want 2 (Issue 4: duplicate init is a conflict)", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout=%q; want empty", out.String())
+	}
+	if !strings.Contains(errOut.String(), "init") {
+		t.Errorf("stderr=%q; want a message mentioning init", errOut.String())
+	}
+	// Contract OUTPUT: the config is NOT written (exclusivity fires before init dispatch).
+	if _, err := os.Stat(cfg); !os.IsNotExist(err) {
+		t.Errorf("config %s was written; exclusivity must fire before init dispatch (got err=%v)", cfg, err)
 	}
 }
 

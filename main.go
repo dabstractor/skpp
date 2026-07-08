@@ -281,15 +281,26 @@ func parseArgs(args []string) config {
 			// dashed flag AND not a reserved subcommand check/init), capture it into
 			// c.initStore and skip it (i++) — the `init <dir>` form. A following
 			// flag (`init --store …`) or subcommand (`init check`) is left for its
-			// own case so exclusivity can flag the conflict. GOTCHA: a store
-			// literally named `check`/`init` must be passed via `--store`.
+			// own case so exclusivity can flag the conflict. A DUPLICATE `init`
+			// (`init init`) is captured into c.tags below so the init+tags exclusivity
+			// branch rejects it with exit 2 (Issue 4) — consistent with `init check`.
+			// GOTCHA: a store literally named `check`/`init` must be passed via `--store`.
 			c.init = true
 			if i+1 < len(args) {
 				next := args[i+1]
-				if !strings.HasPrefix(next, "-") && next != "check" && next != "init" {
+				if next == "init" {
+					// Issue 4: a duplicate reserved `init` token is a conflict, not a store
+					// dir. Capture it as a tag so exclusivityError's init+tags branch rejects
+					// `init init` with exit 2 (consistent with `init check`, where the second
+					// token reaches case "check" and sets c.check). A literal store dir named
+					// "init" must still be passed via --store.
+					c.tags = append(c.tags, next)
+					i++
+				} else if !strings.HasPrefix(next, "-") && next != "check" {
 					c.initStore = next
 					i++
 				}
+				// else: a dashed flag (`init --store …`) or `init check` → left for its own case.
 			}
 		default:
 			// Positional <tag> (PRD §6.1 `skilldozer <tag> [<tag>...]`): a token that
