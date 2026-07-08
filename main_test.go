@@ -2315,3 +2315,73 @@ func TestSetupStoreMkdirAllFailureReturnsWrappedError(t *testing.T) {
 		t.Errorf("config must NOT be written on MkdirAll failure; stat err=%v", err)
 	}
 }
+
+// TestRunInitStoreWritesConfigCreatesStorePrintsPathExit0 — the full init dispatch
+// (P1.M2.T2.S3): `init --store <tmp>` routes through run() → runInit, which resolves
+// the store, creates+seeds it, writes the config, and reports. Asserts the PRD §6.1
+// init row + §8.2 contract: exit 0; store dir created; config.yaml written with
+// store=<abs>; stdout contains the store path. Does NOT use unsetSkillsEnv (that
+// points SKILLDOZER_CONFIG at a non-existent path; here we WANT config writable).
+func TestRunInitStoreWritesConfigCreatesStorePrintsPathExit0(t *testing.T) {
+	// A store path that does NOT exist yet (under a temp parent) -> assert setupStore CREATES it.
+	parent := t.TempDir()
+	store := filepath.Join(parent, "newstore")
+	cfg := filepath.Join(t.TempDir(), "config.yaml")
+	t.Setenv("SKILLDOZER_CONFIG", cfg)    // redirect the config write to a temp file
+	t.Setenv("SKILLDOZER_SKILLS_DIR", "") // ensure the config rule wins (env unset)
+	t.Chdir(t.TempDir())                  // escape the repo's walk-up rule (deterministic)
+
+	var out, errOut bytes.Buffer
+	code := run([]string{"init", "--store", store}, &out, &errOut)
+	if code != 0 {
+		t.Fatalf("run(init --store): code=%d; want 0; stderr=%q", code, errOut.String())
+	}
+
+	// store created (setupStore MkdirAll).
+	info, err := os.Stat(store)
+	if err != nil || !info.IsDir() {
+		t.Errorf("store %q not created: stat err=%v", store, err)
+	}
+
+	// config written with store=<abs> (store is already absolute; resolveStore's Abs is idempotent).
+	f, err := configpkg.Load(cfg)
+	if err != nil {
+		t.Fatalf("config.Load: %v", err)
+	}
+	if f.Store != store {
+		t.Errorf("config.Store=%q; want %q", f.Store, store)
+	}
+
+	// §6.1: stdout contains the configured store path.
+	if !strings.Contains(out.String(), store) {
+		t.Errorf("init stdout=%q; want it to contain the store path %q", out.String(), store)
+	}
+}
+
+// TestRunBareTagUnconfiguredNeverPrompts — the load-bearing prompt-safety guarantee
+// (PRD §6.4/§8.2): a bare `skilldozer <tag>` with no configured store prints the
+// one-line fix hint to stderr, writes NOTHING to stdout, exits 1, and never blocks
+// on stdin. The guarantee is STRUCTURAL: the tag branch never calls resolveStore
+// (the only stdin reader). t.Chdir(t.TempDir()) is MANDATORY — the repo cwd has
+// skills/example/SKILL.md, so the walk-up rule would otherwise resolve and the bare
+// tag would go to resolve (UnknownError) instead of the unconfigured hint. If this
+// test HANGS, someone leaked resolveStore into the tag branch.
+func TestRunBareTagUnconfiguredNeverPrompts(t *testing.T) {
+	unsetSkillsEnv(t)    // neutralize env (SKILLDOZER_SKILLS_DIR) + config (SKILLDOZER_CONFIG) rules
+	t.Chdir(t.TempDir()) // escape the repo walk-up rule (repo cwd HAS skills/example/SKILL.md)
+
+	var out, errOut bytes.Buffer
+	code := run([]string{"someTag"}, &out, &errOut)
+	if code != 1 {
+		t.Fatalf("run(someTag) unconfigured: code=%d; want 1", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("run(someTag) stdout=%q; want EMPTY (§6.4: print nothing on failure)", out.String())
+	}
+	msg := errOut.String()
+	for _, want := range []string{"run", "skilldozer init"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("run(someTag) stderr=%q; missing substring %q (unconfigured hint)", msg, want)
+		}
+	}
+}

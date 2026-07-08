@@ -440,6 +440,16 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 
+	// init dispatch (PRD §8.2). init is an exclusive mode: exclusivityError
+	// above guarantees no other mode is set when c.init is true, so this
+	// self-contained branch returns before the path/list/search/check/all/tags
+	// ladder below. runInit orchestrates resolveStore → config.Path →
+	// setupStore, then prints the --path rendering + the check report (§8.2
+	// step 5). The bare-tag path (c.tags) is untouched and never prompts (§6.4).
+	if c.init {
+		return runInit(c, stdout, stderr)
+	}
+
 	// 5) Normal mode dispatch (order: path → list → search → check → all →
 	//    tags). Each branch body is byte-identical to pre-M5 (any mode that
 	//    reaches here is guaranteed standalone: exclusivityError caught
@@ -956,4 +966,85 @@ func setupStore(store, configPath string) (seeded bool, err error) {
 		return false, fmt.Errorf("skilldozer init: write config %q: %w", configPath, err)
 	}
 	return seeded, nil
+}
+
+// runInit is the `skilldozer init` orchestrator (PRD §8.2). run()'s dispatch calls it
+// when c.init is true (init is exclusive, so no other mode is active). It assembles the
+// three already-landed helpers — resolveStore (P1.M2.T2.S1: choose+absolutize the store),
+// configpkg.Path (the config-file location), setupStore (P1.M2.T2.S2: mkdir+seed+writeconfig)
+// — and then reports: the configured store path to stdout (PRD §6.1), the `--path` "found
+// via" annotation to stderr, and the `check` report to stdout (PRD §8.2 step 5). Exit 0
+// once create+config succeed; the check report is best-effort (NOT a gate — check findings
+// do not change init's exit code, only setup failure does).
+//
+// The bare `skilldozer <tag>` path NEVER reaches here (c.init is false for tags), so tag
+// resolution never prompts (PRD §6.4/§8.2 prompt-safety): stdin access is confined to
+// resolveStore, which only init calls.
+func runInit(c config, stdout, stderr io.Writer) int {
+	// (1) Choose the store (haveStore != "" never blocks; resolveStore absolutizes).
+	store, err := resolveStore(c.initStore)
+	if err != nil {
+		fmt.Fprintln(stderr, err) // one-line (resolveStore wraps with "skilldozer init: …")
+		return 1
+	}
+	// (2) Resolve the config-file location (pure env fn; $SKILLDOZER_CONFIG or XDG default).
+	cfgPath, err := configpkg.Path()
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	// (3) Create the store, seed it if empty, write the config (PRD §8.2 steps 2-4).
+	seeded, err := setupStore(store, cfgPath)
+	if err != nil {
+		fmt.Fprintln(stderr, err) // setupStore wraps with "skilldozer init: …"
+		return 1
+	}
+	// (4) Report what happened. Uses `seeded` (S2's success-path signal). STDERR so §6.1's
+	//     stdout headline (the store path) stays clean.
+	if seeded {
+		fmt.Fprintf(stderr, "Seeded example skill at %s\n", filepath.Join(store, "example", "SKILL.md"))
+	} else {
+		fmt.Fprintf(stderr, "Adopted existing store at %s\n", store)
+	}
+	// (5) Show the EFFECTIVE store + which §8.3 rule won (mirrors `skilldozer --path`, PRD
+	//     §8.2 step 5). Find() runs AFTER setupStore so the just-written config is visible.
+	//     In the common case dir == store and src == "config file"; if SKILLDOZER_SKILLS_DIR
+	//     is set, env beats config and dir/src reflect that honestly.
+	dir, src, ferr := skillsdir.Find()
+	if ferr != nil {
+		// Should not happen (setupStore just wrote a valid config + created the store).
+		// Fall back to the configured store so §6.1 (stdout = store path) still holds.
+		fmt.Fprintln(stderr, ferr)
+		dir = store
+	}
+	// §6.1: stdout = the configured store path (== dir, the effective resolved store).
+	fmt.Fprintln(stdout, dir)
+	if ferr == nil {
+		// Mirror `skilldozer --path`: which rule won.
+		fmt.Fprintf(stderr, "(found via %s)\n", src)
+	}
+	// (6) `skilldozer check` report on the effective store (PRD §8.2 step 5). Mirrors the
+	//     `if c.check` branch render VERBATIM (do not refactor; mirror). Best-effort: a
+	//     discover.Index failure is non-fatal (setup succeeded).
+	skills, ierr := discover.Index(dir)
+	if ierr != nil {
+		fmt.Fprintln(stderr, ierr)
+		return 0 // setup OK; the report is best-effort
+	}
+	rep := check.Check(skills)
+	for _, sr := range rep.BySkill {
+		name := sr.Skill.Name
+		if name == "" {
+			name = "(none)"
+		}
+		if len(sr.Findings) == 0 {
+			fmt.Fprintf(stdout, "%-5s %s (%s)\n", "OK", sr.Skill.RelTag, name)
+			continue
+		}
+		for _, f := range sr.Findings {
+			fmt.Fprintf(stdout, "%-5s %s (%s): %s\n", f.Level, sr.Skill.RelTag, name, f.Message)
+		}
+	}
+	fmt.Fprintf(stdout, "%d skills, %d errors, %d warnings\n", len(skills), rep.Errors, rep.Warnings)
+	return 0 // setup succeeded; check findings do not change init's exit code
 }

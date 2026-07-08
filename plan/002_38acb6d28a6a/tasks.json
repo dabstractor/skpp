@@ -106,7 +106,7 @@
           "type": "Milestone",
           "id": "P1.M2",
           "title": "init subcommand — §8.2 first-run setup (prompt, create store, write config)",
-          "status": "Researching",
+          "status": "Complete",
           "description": "Depends on M1. Today `skilldozer init` is misparsed as an unknown tag. This milestone adds the init subcommand end to end: argument/dispatch/help/exclusivity plumbing in main.go, then the init flow (cwd auto-detect + TTY-gated prompt to choose the store, mkdir + seed a compiled-in template + write the config via config.Save, then the run() branch that orchestrates and prints --path + check with correct exit codes). Bare tag resolution must remain prompt-free.",
           "tasks": [
             {
@@ -140,7 +140,7 @@
               "type": "Task",
               "id": "P1.M2.T2",
               "title": "init flow implementation — choose store, create store, write config, orchestrate",
-              "status": "Researching",
+              "status": "Complete",
               "description": "The executable init behavior (PRD §8.2). Three subtasks with a strict handoff chain: S1 chooses the store dir (cwd auto-detect via HasSkillMD + TTY-gated prompt, else c.initStore or the default), S2 creates the store (mkdir -p, seed a compiled-in example template into an empty store, never clobber) and writes config.yaml via config.Save, S3 wires the run() branch that calls S1+S2, then prints skilldozer --path and skilldozer check output, sets exit codes, and guarantees the bare-tag path never prompts.",
               "subtasks": [
                 {
@@ -185,7 +185,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T2.S3",
                   "title": "run() init dispatch — orchestrate, print --path + check, exit codes, never-prompt guarantee",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M2.T1.S1",
@@ -217,14 +217,14 @@
               "type": "Task",
               "id": "P1.M3.T1",
               "title": "Fix the shipped example skill — skpp -> skilldozer (PRD §11)",
-              "status": "Planned",
+              "status": "Researching",
               "description": "skills/example/SKILL.md still says skpp in 7 places (description, keywords, body). This is the only non-plan file with literal skpp residue, and it functionally inverts --search (keyword skpp matches while skilldozer does not). Conform it to PRD §11 verbatim.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T1.S1",
                   "title": "Rewrite skills/example/SKILL.md to match PRD §11 (skilldozer wording + keywords)",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See architecture/docs_and_assets_drift.md §1 — current file skills/example/SKILL.md lines 4,5,7,13,18,19,20 say skpp. PRD §11 gives the exact canonical content. Keep frontmatter `name: example` and `category: meta` unchanged (already correct). This is also the source of truth for the compiled-in seed template used by P1.M2.T2.S2 — keep them identical.\n2. INPUT: PRD §11 (the example skill block). The discover/search/check packages consume this file's frontmatter (name/description/keywords).\n3. LOGIC: Replace the 7 skpp occurrences with skilldozer: description -> 'Reference example skill for skilldozer. Demonstrates the required frontmatter and how skilldozer resolves a tag to an absolute path. Safe to delete once you add real skills.'; `metadata.keywords: [example, demo, skilldozer]`; body line 'This skill exists only so `skilldozer` has something to resolve.'; the three try-commands using `skilldozer example`, `skilldozer -f example`, `pi --skill \"$(skilldozer example)\"`. Match PRD §11 byte-for-byte (whitespace/frontmatter style included). Do NOT change name/category/license.\n4. OUTPUT: skills/example/SKILL.md compliant with §11. Verified by: `./skilldozer check` still reports OK example; `./skilldozer --search skilldozer` now matches (and `--search skpp` no longer matches); `./skilldozer example` still resolves. (If P1.M2.T2.S2's compiled-in template was written before this fix, re-sync the constant to this exact text.)\n5. DOCS: [Mode A] This file IS the user-facing example asset and its body doubles as inline documentation — updating it in this subtask satisfies the doc-with-work rule. No separate doc subtask.",
