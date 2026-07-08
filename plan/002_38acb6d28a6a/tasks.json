@@ -106,7 +106,7 @@
           "type": "Milestone",
           "id": "P1.M2",
           "title": "init subcommand — §8.2 first-run setup (prompt, create store, write config)",
-          "status": "Planned",
+          "status": "Researching",
           "description": "Depends on M1. Today `skilldozer init` is misparsed as an unknown tag. This milestone adds the init subcommand end to end: argument/dispatch/help/exclusivity plumbing in main.go, then the init flow (cwd auto-detect + TTY-gated prompt to choose the store, mkdir + seed a compiled-in template + write the config via config.Save, then the run() branch that orchestrates and prints --path + check with correct exit codes). Bare tag resolution must remain prompt-free.",
           "tasks": [
             {
@@ -140,7 +140,7 @@
               "type": "Task",
               "id": "P1.M2.T2",
               "title": "init flow implementation — choose store, create store, write config, orchestrate",
-              "status": "Planned",
+              "status": "Researching",
               "description": "The executable init behavior (PRD §8.2). Three subtasks with a strict handoff chain: S1 chooses the store dir (cwd auto-detect via HasSkillMD + TTY-gated prompt, else c.initStore or the default), S2 creates the store (mkdir -p, seed a compiled-in example template into an empty store, never clobber) and writes config.yaml via config.Save, S3 wires the run() branch that calls S1+S2, then prints skilldozer --path and skilldozer check output, sets exit codes, and guarantees the bare-tag path never prompts.",
               "subtasks": [
                 {
@@ -165,7 +165,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T2.S2",
                   "title": "Create store (mkdir + seed compiled-in template) and write config.yaml",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T1.S1",
@@ -185,7 +185,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T2.S3",
                   "title": "run() init dispatch — orchestrate, print --path + check, exit codes, never-prompt guarantee",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M2.T1.S1",

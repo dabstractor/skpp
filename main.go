@@ -874,3 +874,86 @@ func resolveStore(haveStore string) (string, error) {
 	}
 	return abs, nil
 }
+
+// exampleSkillTemplate is the PRD §11 example skill body, compiled into the binary as a
+// STRING CONSTANT (NOT go:embed — PRD §17 "nothing about the user's collection is compiled
+// in"; code_prd_delta.md G11). skilldozer init writes this verbatim into an EMPTY store's
+// example/SKILL.md (PRD §8.2 step 3). NOTE: there is a SECOND copy of this exact text on
+// disk at skills/example/SKILL.md (P1.M3.T1.S1's repo asset); both MUST equal PRD §11.
+//
+// Raw literals can't hold backticks; the §11 body has 8 (2 inline `skilldozer` + the
+// ```bash fence). Splice double-quoted backtick runs between raw segments via `+`.
+const exampleSkillTemplate = `---
+name: example
+description: >
+  Reference example skill for skilldozer. Demonstrates the required frontmatter and
+  how skilldozer resolves a tag to an absolute path. Safe to delete once you add real skills.
+metadata:
+  keywords: [example, demo, skilldozer]
+  category: meta
+---
+
+# Example Skill
+
+This skill exists only so ` + "`skilldozer`" + ` has something to resolve.
+
+Try:
+
+` + "```bash" + `
+skilldozer example                       # prints this directory's absolute path
+skilldozer -f example                    # prints .../skills/example/SKILL.md
+pi --skill "$(skilldozer example)"       # loads this skill into pi
+` + "```" + `
+`
+
+// setupStore creates the skills store, seeds it if empty, and writes the config. It is
+// the create+seed+writeconfig half of `skilldozer init` (PRD §8.2 steps 2-4); the
+// store-CHOICE half is resolveStore (P1.M2.T2.S1), and run()'s `if c.init` dispatch
+// (P1.M2.T2.S3) calls both. Both targets are INJECTED as strings (store is already
+// absolute — resolveStore absolutized it; configPath is config.Path()'s result from
+// run()), so this function is directly unit-testable with temp paths and needs no
+// separate wrapper layer.
+//
+// Steps:
+//
+//	(a) os.MkdirAll(store, 0o755) — create the store dir if missing (PRD §8.2 step 2).
+//	(b) os.ReadDir(store): if the dir is EMPTY (zero entries of any kind), seed
+//	    example/SKILL.md from the compiled-in exampleSkillTemplate (PRD §8.2 step 3,
+//	    §11) — MkdirAll(store/example) then WriteFile; seeded=true. "Empty" means no
+//	    entries at all, NOT "no SKILL.md" (a single pre-existing file ⇒ adopt).
+//	(c) If the store already contains ANYTHING, adopt it in place: NEVER clobber or
+//	    delete existing files (PRD §17 guardrail); seeded stays false.
+//	(d) config.Save(configPath, config.File{Store: store}) — write the config with the
+//	    absolute store path (PRD §8.2 step 4). ALWAYS runs, whether seeded or adopted.
+//
+// Returns (seeded, nil) on success, or (false, err) on any fs failure — `seeded` is a
+// SUCCESS-PATH signal (run()/S3 prints "seeded" vs "adopted"); callers MUST check err
+// before reading seeded, so a config.Save failure after a successful seed still returns
+// (false, err). Errors are wrapped with a "skilldozer init: <step>: %w" prefix.
+func setupStore(store, configPath string) (seeded bool, err error) {
+	// (a) Ensure the store dir exists (idempotent — no-op if present).
+	if err := os.MkdirAll(store, 0o755); err != nil {
+		return false, fmt.Errorf("skilldozer init: create store dir %q: %w", store, err)
+	}
+	// (b) Seed only if the store is EMPTY (zero entries of any kind).
+	entries, err := os.ReadDir(store)
+	if err != nil {
+		return false, fmt.Errorf("skilldozer init: read store dir %q: %w", store, err)
+	}
+	if len(entries) == 0 {
+		exampleDir := filepath.Join(store, "example")
+		if err := os.MkdirAll(exampleDir, 0o755); err != nil {
+			return false, fmt.Errorf("skilldozer init: create example dir: %w", err)
+		}
+		if err := os.WriteFile(filepath.Join(exampleDir, "SKILL.md"), []byte(exampleSkillTemplate), 0o644); err != nil {
+			return false, fmt.Errorf("skilldozer init: seed example SKILL.md: %w", err)
+		}
+		seeded = true
+	}
+	// (c) Non-empty: adopt in place. Do NOTHING to existing files (PRD §17). seeded stays false.
+	// (d) Always write the config with the (already-absolute) store path.
+	if err := configpkg.Save(configPath, configpkg.File{Store: store}); err != nil {
+		return false, fmt.Errorf("skilldozer init: write config %q: %w", configPath, err)
+	}
+	return seeded, nil
+}

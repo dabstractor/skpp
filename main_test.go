@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	configpkg "github.com/dabstractor/skilldozer/internal/config"
 )
 
 // withTerminal overrides the package-level isTerminal func for one test and
@@ -2174,5 +2176,142 @@ func TestChooseStorePropagatesPromptError(t *testing.T) {
 	got, err := chooseStore("", t.TempDir(), true, "/def", prompt)
 	if err == nil || !errors.Is(err, wantErr) {
 		t.Errorf("chooseStore(prompt-error): got (%q,%v); want error wrapping %v", got, err, wantErr)
+	}
+}
+
+// TestSetupStoreEmptyDirSeedsExampleAndWritesConfig locks the empty-store seed path: an
+// empty store dir is created, example/SKILL.md is written with the exampleSkillTemplate
+// bytes EXACTLY (catches a botched backtick splice — GOTCHA #1), and the config is
+// written with store=<abs> verbatim (round-tripped via config.Load).
+func TestSetupStoreEmptyDirSeedsExampleAndWritesConfig(t *testing.T) {
+	store := t.TempDir() // empty
+	cfg := filepath.Join(t.TempDir(), "config.yaml")
+	seeded, err := setupStore(store, cfg)
+	if err != nil {
+		t.Fatalf("setupStore(empty): %v; want nil", err)
+	}
+	if !seeded {
+		t.Errorf("setupStore(empty): seeded=false; want true")
+	}
+	// example/SKILL.md exists with the template bytes EXACTLY (catches a botched splice).
+	got, err := os.ReadFile(filepath.Join(store, "example", "SKILL.md"))
+	if err != nil {
+		t.Fatalf("read seeded example/SKILL.md: %v", err)
+	}
+	if string(got) != exampleSkillTemplate {
+		t.Errorf("seeded example/SKILL.md != exampleSkillTemplate:\ngot:\n%s\nwant:\n%s", got, exampleSkillTemplate)
+	}
+	// config written with store=<abs> verbatim (round-trip via config.Load).
+	f, err := configpkg.Load(cfg)
+	if err != nil {
+		t.Fatalf("config.Load: %v", err)
+	}
+	if f.Store != store {
+		t.Errorf("config.Store=%q; want %q", f.Store, store)
+	}
+}
+
+// TestSetupStoreNonEmptyDirAdoptsInPlaceAndWritesConfig locks the §17 never-clobber
+// guardrail: a store containing ANY pre-existing entry (even a non-skill file) is
+// adopted in place — the file is byte-intact, NO example/ dir is created, seeded is
+// false — but the config is still written.
+func TestSetupStoreNonEmptyDirAdoptsInPlaceAndWritesConfig(t *testing.T) {
+	store := t.TempDir()
+	preExisting := filepath.Join(store, "mynotes.md") // a non-skill file
+	if err := os.WriteFile(preExisting, []byte("# my stuff\n"), 0o644); err != nil {
+		t.Fatalf("seed fixture: %v", err)
+	}
+	cfg := filepath.Join(t.TempDir(), "config.yaml")
+	seeded, err := setupStore(store, cfg)
+	if err != nil {
+		t.Fatalf("setupStore(non-empty): %v; want nil", err)
+	}
+	if seeded {
+		t.Errorf("setupStore(non-empty): seeded=true; want false (adopt in place)")
+	}
+	// the pre-existing file is byte-intact (never clobbered).
+	got, err := os.ReadFile(preExisting)
+	if err != nil {
+		t.Fatalf("read pre-existing: %v", err)
+	}
+	if string(got) != "# my stuff\n" {
+		t.Errorf("pre-existing file changed: %q; want %q", got, "# my stuff\n")
+	}
+	// NO example/ dir was created.
+	if _, err := os.Stat(filepath.Join(store, "example")); !os.IsNotExist(err) {
+		t.Errorf("example/ must NOT be created in a non-empty store; stat err=%v", err)
+	}
+	// config still written.
+	f, err := configpkg.Load(cfg)
+	if err != nil {
+		t.Fatalf("config.Load: %v", err)
+	}
+	if f.Store != store {
+		t.Errorf("config.Store=%q; want %q", f.Store, store)
+	}
+}
+
+// TestSetupStoreIdempotent locks the re-run contract: run 1 (empty) seeds, run 2
+// (non-empty) adopts and does NOT clobber the seeded example/SKILL.md (it is
+// byte-identical across runs), and the config stays valid after the rewrite.
+func TestSetupStoreIdempotent(t *testing.T) {
+	store := t.TempDir()
+	cfg := filepath.Join(t.TempDir(), "config.yaml")
+	// first run: empty -> seed.
+	seeded1, err := setupStore(store, cfg)
+	if err != nil || !seeded1 {
+		t.Fatalf("first run: (%v,%v); want (true,nil)", seeded1, err)
+	}
+	first, err := os.ReadFile(filepath.Join(store, "example", "SKILL.md"))
+	if err != nil {
+		t.Fatalf("read after first run: %v", err)
+	}
+	// second run: store now non-empty -> adopt, no clobber, rewrite config (idempotent).
+	seeded2, err := setupStore(store, cfg)
+	if err != nil {
+		t.Fatalf("second run: %v; want nil", err)
+	}
+	if seeded2 {
+		t.Errorf("second run: seeded=true; want false (store already has content)")
+	}
+	second, err := os.ReadFile(filepath.Join(store, "example", "SKILL.md"))
+	if err != nil {
+		t.Fatalf("read after second run: %v", err)
+	}
+	if string(first) != string(second) {
+		t.Errorf("idempotent re-run changed example/SKILL.md:\nfirst:\n%s\nsecond:\n%s", first, second)
+	}
+	// config still valid after the rewrite.
+	f, err := configpkg.Load(cfg)
+	if err != nil {
+		t.Fatalf("config.Load after re-run: %v", err)
+	}
+	if f.Store != store {
+		t.Errorf("config.Store=%q; want %q", f.Store, store)
+	}
+}
+
+// TestSetupStoreMkdirAllFailureReturnsWrappedError locks the error path: when the
+// store path points at an existing regular file, os.MkdirAll fails, setupStore
+// returns (false, err) — the conventional zero-value-on-error — and NO config.yaml
+// is written (the failure precedes config.Save).
+func TestSetupStoreMkdirAllFailureReturnsWrappedError(t *testing.T) {
+	// Make the store path a regular FILE: os.MkdirAll on an existing non-dir fails.
+	parent := t.TempDir()
+	store := filepath.Join(parent, "notadir")
+	if err := os.WriteFile(store, []byte("x"), 0o644); err != nil {
+		t.Fatalf("fixture: %v", err)
+	}
+	cfg := filepath.Join(t.TempDir(), "config.yaml")
+	seeded, err := setupStore(store, cfg)
+	if err == nil {
+		t.Fatalf("expected MkdirAll error; got (%v,nil)", seeded)
+	}
+	if seeded {
+		t.Errorf("on error: seeded=true; want false")
+	}
+	// the failure precedes config.Save, so no config.yaml must exist.
+	if _, err := os.Stat(cfg); !os.IsNotExist(err) {
+		t.Errorf("config must NOT be written on MkdirAll failure; stat err=%v", err)
 	}
 }
