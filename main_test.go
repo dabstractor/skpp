@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -2074,5 +2075,104 @@ func TestRunExclusivityListingModePairs(t *testing.T) {
 				t.Errorf("stderr=%q; want 'mutually exclusive'", errOut.String())
 			}
 		})
+	}
+}
+
+// --- chooseStore (init store-choice decision core, PRD §8.2) ---
+
+// mkdirWithSkillMD builds a temp dir that contains a NESTED SKILL.md so it
+// looks like an existing skills store (skillsdir.HasSkillMD ⇒ true). Used to
+// exercise the cwd-auto-detect default branch of chooseStore.
+func mkdirWithSkillMD(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	sub := filepath.Join(dir, "writing", "reddit")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sub, "SKILL.md"), []byte("# skill\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	return dir
+}
+
+// failIfCalled returns a prompt fn that fails the test if chooseStore invokes it.
+// Enforces the prompt-safety guarantee (PRD §8.2 / decision #13): the non-interactive
+// branches (`haveStore != ""` and `!isTTY`) must NEVER call the prompt fn.
+func failIfCalled(t *testing.T) func(string, string) (string, error) {
+	t.Helper()
+	return func(label, def string) (string, error) {
+		t.Errorf("chooseStore: prompt must not be called (label=%q)", label)
+		return "", nil
+	}
+}
+
+// OUTPUT #1: `init --store /tmp/x` ⇒ /tmp/x; prompt NEVER called.
+func TestChooseStoreExplicitOverrideNoPrompt(t *testing.T) {
+	got, err := chooseStore("/tmp/x", "/any/cwd", true, "/def", failIfCalled(t))
+	if err != nil || got != "/tmp/x" {
+		t.Errorf("chooseStore(/tmp/x,...): got (%q,%v); want (/tmp/x,nil)", got, err)
+	}
+}
+
+// OUTPUT #2: cwd-with-SKILL.md + non-TTY ⇒ cwd; prompt NEVER called.
+func TestChooseStoreCwdDetectNonTTY(t *testing.T) {
+	cwd := mkdirWithSkillMD(t)
+	got, err := chooseStore("", cwd, false, "/def", failIfCalled(t))
+	if err != nil || got != cwd {
+		t.Errorf("chooseStore(cwd-with-skill,non-TTY): got (%q,%v); want (%q,nil)", got, err, cwd)
+	}
+}
+
+// OUTPUT #3: cwd-without + non-TTY ⇒ defaultStore; prompt NEVER called.
+func TestChooseStoreNoSkillNonTTYUsesDefault(t *testing.T) {
+	got, err := chooseStore("", t.TempDir(), false, "/def", failIfCalled(t))
+	if err != nil || got != "/def" {
+		t.Errorf("chooseStore(empty-cwd,non-TTY): got (%q,%v); want (/def,nil)", got, err)
+	}
+}
+
+// OUTPUT #4: isTTY + prompt "" ⇒ default (cwd-without so default=defaultStore).
+func TestChooseStoreTTYEmptyPromptAcceptsDefault(t *testing.T) {
+	prompt := func(label, def string) (string, error) { return "", nil }
+	got, err := chooseStore("", t.TempDir(), true, "/def", prompt)
+	if err != nil || got != "/def" {
+		t.Errorf("chooseStore(TTY,empty-prompt): got (%q,%v); want (/def,nil)", got, err)
+	}
+}
+
+// OUTPUT #5: isTTY + prompt "/custom" ⇒ /custom (VERBATIM — GOTCHA #3: no Abs in core).
+func TestChooseStoreTTYTypedPathOverrides(t *testing.T) {
+	prompt := func(label, def string) (string, error) { return "/custom", nil }
+	got, err := chooseStore("", t.TempDir(), true, "/def", prompt)
+	if err != nil || got != "/custom" {
+		t.Errorf("chooseStore(TTY,typed-/custom): got (%q,%v); want (/custom,nil)", got, err)
+	}
+}
+
+// The cwd-auto-detect DEFAULT is cwd even on a TTY; an empty prompt answer
+// accepts that cwd default (not defaultStore). Guards against a bug where
+// HasSkillMD is only consulted on the !isTTY branch.
+func TestChooseStoreCwdDetectIsAlsoTheTTYDefault(t *testing.T) {
+	cwd := mkdirWithSkillMD(t)
+	prompt := func(label, def string) (string, error) {
+		if def != cwd {
+			t.Errorf("prompt default=%q; want cwd %q (auto-detect)", def, cwd)
+		}
+		return "", nil // Enter ⇒ accept the cwd default
+	}
+	got, err := chooseStore("", cwd, true, "/def", prompt)
+	if err != nil || got != cwd {
+		t.Errorf("chooseStore(cwd-with-skill,TTY,empty): got (%q,%v); want (%q,nil)", got, err, cwd)
+	}
+}
+
+// A genuine (non-EOF) prompt read error is returned, not swallowed.
+func TestChooseStorePropagatesPromptError(t *testing.T) {
+	wantErr := errors.New("simulated read failure")
+	prompt := func(label, def string) (string, error) { return "", wantErr }
+	got, err := chooseStore("", t.TempDir(), true, "/def", prompt)
+	if err == nil || !errors.Is(err, wantErr) {
+		t.Errorf("chooseStore(prompt-error): got (%q,%v); want error wrapping %v", got, err, wantErr)
 	}
 }

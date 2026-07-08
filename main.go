@@ -13,6 +13,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"os"
@@ -20,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/dabstractor/skilldozer/internal/check"
+	configpkg "github.com/dabstractor/skilldozer/internal/config"
 	"github.com/dabstractor/skilldozer/internal/discover"
 	"github.com/dabstractor/skilldozer/internal/resolve"
 	"github.com/dabstractor/skilldozer/internal/search"
@@ -743,4 +745,132 @@ func skillPath(s discover.Skill, skillsDir string, c config) string {
 		}
 	}
 	return p
+}
+
+// stdinIsTerminal reports whether os.Stdin is an interactive terminal. It is
+// the stdin counterpart of the stdout isTerminal check (PRD §6.2 color gating,
+// main.go:96-112): the SAME ModeCharDevice technique applied to a DIFFERENT
+// stream (os.Stdin, not an io.Writer). init uses it to gate the interactive
+// prompt so piped/redirected invocations never block (PRD §8.2 prompt safety).
+//
+// It is a plain function (not a package var) because init's test seam is
+// chooseStore's isTTY PARAMETER, not a global override — see chooseStore.
+// Caveat (harmless): /dev/null is also a char device, so this reports true for
+// `init < /dev/null`; the immediate EOF there makes readPrompt return the
+// default, so it never hangs. No golang.org/x/term (yaml.v3 stays the sole
+// non-stdlib dep — external_deps.md §3).
+func stdinIsTerminal() bool {
+	fi, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
+}
+
+// readPrompt prints the prompt (label, with [def] in brackets) to w, reads one
+// line from r, and returns the trimmed answer — or def when the user just presses
+// Enter (empty line) or sends EOF on an otherwise-empty line. A genuine read
+// error (non-EOF) is returned. Used by init's interactive prompt (PRD §8.2).
+// (external_deps.md §4 prescribes bufio.Reader.ReadString('\n') over Scanner.)
+func readPrompt(r *bufio.Reader, w io.Writer, label, def string) (string, error) {
+	if def != "" {
+		fmt.Fprintf(w, "%s [%s]: ", label, def)
+	} else {
+		fmt.Fprintf(w, "%s: ", label)
+	}
+	line, err := r.ReadString('\n') // includes the trailing '\n'
+	if err != nil && err != io.EOF {
+		return "", err
+	}
+	if s := strings.TrimSpace(line); s != "" {
+		return s, nil
+	}
+	return def, nil // empty Enter OR EOF-with-no-text ⇒ accept default
+}
+
+// chooseStore resolves the store directory for `skilldozer init` (PRD §8.2) via a
+// 4-step decision that is fully independent of os.Stdin/os.Stdout/os.Getwd: the
+// caller injects cwd, isTTY, the default store, and a prompt function, so the
+// logic is unit-testable without a real terminal (the contract FACTORING).
+//
+// Resolution order (first applicable wins):
+//  1. haveStore != "" — the non-interactive override from `init <dir>` or
+//     `--store <dir>`. Returned VERBATIM; the prompt is NEVER called (scripts/CI).
+//  2. auto-detect the default: if cwd already looks like a store (it contains at
+//     least one SKILL.md at any depth — skillsdir.HasSkillMD, PRD §8.2 "detected
+//     skills in <cwd>"), default = cwd; else default = defaultStore (the
+//     $XDG_DATA_HOME/skilldozer/skills value from config.DefaultStore).
+//  3. isTTY — prompt "Where should skilldozer keep your skills? [<default>]".
+//     readPrompt makes empty line / EOF ⇒ default; a typed path ⇒ override.
+//  4. !isTTY and no explicit haveStore — return the auto-detected default with NO
+//     prompt (scripts / CI / pipes). The prompt is NEVER called.
+//
+// The chosen string is returned VERBATIM (it may be relative if the user typed a
+// relative path); resolveStore absolutizes it via filepath.Abs. A non-nil error is
+// returned ONLY on a genuine prompt read failure (a non-EOF error from the prompt
+// fn); empty/EOF is "accept default", never an error.
+func chooseStore(haveStore, cwd string, isTTY bool, defaultStore string, prompt func(label, def string) (string, error)) (string, error) {
+	// (1) Non-interactive override: `init <dir>` / `--store <dir>`. No prompt.
+	if haveStore != "" {
+		return haveStore, nil
+	}
+	// (2) Auto-detect the default from cwd (PRD §8.2 "detected skills in <cwd>").
+	def := defaultStore
+	if skillsdir.HasSkillMD(cwd) {
+		def = cwd
+	}
+	// (4) Off-TTY (pipe/file/CI): use the default, NO prompt (never blocks).
+	if !isTTY {
+		return def, nil
+	}
+	// (3) Interactive: prompt. Empty/EOF answer ⇒ def (the auto-detected default);
+	// a typed path ⇒ override (returned verbatim). A genuine read error propagates.
+	// readPrompt performs the empty⇒default translation for the real reader; chooseStore
+	// applies the SAME rule to the prompt fn's return so the decision core is
+	// self-contained regardless of which prompt fn is injected (contract §8.2).
+	choice, err := prompt("Where should skilldozer keep your skills?", def)
+	if err != nil {
+		return "", err
+	}
+	if choice == "" {
+		return def, nil
+	}
+	return choice, nil
+}
+
+// resolveStore is the I/O-bearing wrapper around chooseStore that run()'s init
+// dispatch (P1.M2.T2.S3) calls. It supplies the real dependencies — os.Getwd(),
+// config.DefaultStore(), the os.Stdin TTY check (stdinIsTerminal), and a bufio
+// prompt reader over os.Stdin/os.Stdout (readPrompt) — and returns chooseStore's
+// choice ABSOLUTIZED via filepath.Abs (PRD §8.2 "absolute store path"). The ONE
+// shared bufio.NewReader is created here and captured by the prompt closure so a
+// future second prompt would reuse it (external_deps.md §4: a fresh reader per
+// prompt can swallow buffered bytes).
+//
+// The os.Stdin / os.Stdout / os.Getwd access is confined to THIS function so the
+// pure decision logic in chooseStore stays terminal-free and unit-testable. A
+// genuine cwd/default/absolutize/prompt error is returned wrapped; an empty or
+// EOF prompt answer is NOT an error (readPrompt ⇒ default).
+func resolveStore(haveStore string) (string, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("skilldozer init: resolve cwd: %w", err)
+	}
+	def, err := configpkg.DefaultStore()
+	if err != nil {
+		return "", fmt.Errorf("skilldozer init: resolve default store: %w", err)
+	}
+	r := bufio.NewReader(os.Stdin)
+	prompt := func(label, def string) (string, error) {
+		return readPrompt(r, os.Stdout, label, def)
+	}
+	store, err := chooseStore(haveStore, cwd, stdinIsTerminal(), def, prompt)
+	if err != nil {
+		return "", err
+	}
+	abs, err := filepath.Abs(store)
+	if err != nil {
+		return "", fmt.Errorf("skilldozer init: absolutize store: %w", err)
+	}
+	return abs, nil
 }
