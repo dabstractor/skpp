@@ -57,6 +57,7 @@ USAGE:
   skilldozer --list
   skilldozer --search <query>
   skilldozer check
+  skilldozer init [<dir>]
   skilldozer --path
   skilldozer --help
   skilldozer --version
@@ -70,6 +71,7 @@ EXAMPLES:
   skilldozer --list                  # human-readable catalog
   skilldozer --search reddit         # substring search over tag/name/description/keywords/aliases/category
   skilldozer check                   # validate every skill on disk
+  skilldozer init --store <dir>     # non-interactive first-run setup
 
 OPTIONS:
   <tag> [<tag>...]   Resolve tags to skill directory paths (one absolute path per line)
@@ -77,6 +79,8 @@ OPTIONS:
   --list, -l         Human-readable catalog (TAG, NAME, DESCRIPTION)
   --search <q>, -s   Substring search over tag / name / description / keywords / aliases / category
   check              Validate every skill on disk (report OK / WARN / ERROR)
+  init [<dir>]      First-run setup: pick/create the skills store and write the config
+  --store <dir>     Non-interactive store path for init
   --path, -p         Print the resolved skills directory (discovery rule printed to stderr)
   --file, -f         Print the SKILL.md path instead of the directory (modifier)
   --relative         Print paths relative to the skills directory (modifier)
@@ -131,6 +135,8 @@ type config struct {
 	searchMode  bool     // --search <q>/-s : substring search over tag/name/description/keywords/aliases/category (§10)
 	searchQ     string   // the --search query value (consumed from the token after --search/-s)
 	check       bool     // `skilldozer check` subcommand: validate every skill in the store (§9)
+	init        bool     // `skilldozer init [<dir>]` first-run setup (PRD §8.2); also set by `--store <dir>` (which implies init)
+	initStore   string   // non-interactive store path: `init <dir>` positional or `--store <dir>` / `--store=<dir>`; empty ⇒ auto-detect (P1.M2.T2.S3)
 	tags        []string // positional <tag> args (PRD §6.1 `skilldozer <tag> [<tag>...]`); resolved in run
 	unknownFlag string   // first unknown dashed token, "" if none (§6 header → exit 2)
 }
@@ -181,6 +187,11 @@ func parseArgs(args []string) config {
 			case "--search":
 				c.searchMode = true
 				c.searchQ = val
+			case "--store":
+				// `--store=<dir>`: non-interactive store path for init (PRD §8.2). Mirrors
+				// --search's '='-form; implies init mode (c.init=true). No short form.
+				c.init = true
+				c.initStore = val
 			default:
 				if c.unknownFlag == "" {
 					c.unknownFlag = a
@@ -241,6 +252,34 @@ func parseArgs(args []string) config {
 			// nested skill `writing/check` still resolves: this case matches only
 			// the EXACT token "check".
 			c.check = true
+		case "--store":
+			// `--store <dir>`: non-interactive store path for init (PRD §8.2). Mirrors
+			// --search's next-token capture; implies init mode (c.init=true). No
+			// short form. If it is the LAST token (no value follows) init stays
+			// unset — mirrors --search-no-value (no exit-2 "needs argument" here;
+			// the codebase defers that repo-wide).
+			if i+1 < len(args) {
+				c.init = true
+				c.initStore = args[i+1]
+				i++
+			}
+		case "init":
+			// `skilldozer init [<dir>]` first-run setup (PRD §8.2). `init` is a RESERVED
+			// positional token (like `check`): it selects init mode and is NOT
+			// captured as a tag. If the NEXT token is a positional <dir> (not a
+			// dashed flag AND not a reserved subcommand check/init), capture it into
+			// c.initStore and skip it (i++) — the `init <dir>` form. A following
+			// flag (`init --store …`) or subcommand (`init check`) is left for its
+			// own case so exclusivity can flag the conflict. GOTCHA: a store
+			// literally named `check`/`init` must be passed via `--store`.
+			c.init = true
+			if i+1 < len(args) {
+				next := args[i+1]
+				if !strings.HasPrefix(next, "-") && next != "check" && next != "init" {
+					c.initStore = next
+					i++
+				}
+			}
 		default:
 			// Positional <tag> (PRD §6.1 `skilldozer <tag> [<tag>...]`): a token that
 			// does NOT start with '-' is a tag, captured here and resolved in run.
@@ -656,6 +695,19 @@ func exclusivityError(c config) (bad bool, msg string) {
 	}
 	if c.check && (c.path || c.list || c.searchMode || c.all) {
 		return true, "skilldozer: 'check' cannot be combined with --path/--list/--search/--all"
+	}
+	// init is its own exclusive mode (PRD §6.3 / §8.2: like `check`). It rejects the
+	// listing/inspection modes AND stray tags. A single positional <dir> after `init`
+	// is consumed as the store (c.initStore) by parseArgs, so it never reaches
+	// c.tags; a SECOND positional, or any positional after `init --store`, lands in
+	// c.tags and is rejected here as a stray.
+	if c.init {
+		if hasTags {
+			return true, "skilldozer: 'init' cannot be combined with tag arguments"
+		}
+		if c.check || c.list || c.searchMode || c.all || c.path {
+			return true, "skilldozer: 'init' cannot be combined with --list/--search/--all/--path/check"
+		}
 	}
 	return false, ""
 }

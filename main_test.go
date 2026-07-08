@@ -1148,6 +1148,87 @@ func TestParseArgsCheckAndTagBothCaptured(t *testing.T) {
 	}
 }
 
+// --- parseArgs: `skilldozer init` + `--store` (P1.M2.T1.S1) ---
+
+// `init` alone is a RESERVED subcommand (like `check`): sets c.init and is NOT
+// captured as a tag.
+func TestParseArgsInitSubcommand(t *testing.T) {
+	c := parseArgs([]string{"init"})
+	if !c.init {
+		t.Errorf("parseArgs(init): init=false; want true")
+	}
+	if len(c.tags) != 0 {
+		t.Errorf("parseArgs(init): tags=%v; want empty ('init' is a subcommand, not a tag)", c.tags)
+	}
+	if c.initStore != "" {
+		t.Errorf("parseArgs(init): initStore=%q; want empty", c.initStore)
+	}
+}
+
+// `init <dir>` captures the positional <dir> into c.initStore (NOT into tags).
+func TestParseArgsInitPositionalDir(t *testing.T) {
+	c := parseArgs([]string{"init", "/tmp/x"})
+	if !c.init {
+		t.Errorf("init not set")
+	}
+	if c.initStore != "/tmp/x" {
+		t.Errorf("initStore=%q; want /tmp/x", c.initStore)
+	}
+	if len(c.tags) != 0 {
+		t.Errorf("tags=%v; want empty (dir consumed as store, not a tag)", c.tags)
+	}
+}
+
+// `init --store <dir>` long form: --store fills initStore (init already set).
+func TestParseArgsInitStoreLongForm(t *testing.T) {
+	c := parseArgs([]string{"init", "--store", "/tmp/x"})
+	if !c.init {
+		t.Errorf("init not set")
+	}
+	if c.initStore != "/tmp/x" {
+		t.Errorf("initStore=%q; want /tmp/x", c.initStore)
+	}
+	if len(c.tags) != 0 {
+		t.Errorf("tags=%v; want empty", c.tags)
+	}
+}
+
+// `init --store=<dir>` '='-form: --store fills initStore.
+func TestParseArgsInitStoreEqualsForm(t *testing.T) {
+	c := parseArgs([]string{"init", "--store=/tmp/x"})
+	if !c.init {
+		t.Errorf("init not set")
+	}
+	if c.initStore != "/tmp/x" {
+		t.Errorf("initStore=%q; want /tmp/x", c.initStore)
+	}
+}
+
+// `--store <dir>` with NO `init` token still implies init (contract OUTPUT §4:
+// `skilldozer --store <dir>` parses as init).
+func TestParseArgsStoreWithoutInitToken(t *testing.T) {
+	c := parseArgs([]string{"--store", "/tmp/x"})
+	if !c.init {
+		t.Errorf("--store should set init=true; got false")
+	}
+	if c.initStore != "/tmp/x" {
+		t.Errorf("initStore=%q; want /tmp/x", c.initStore)
+	}
+	if len(c.tags) != 0 {
+		t.Errorf("tags=%v; want empty", c.tags)
+	}
+}
+
+// Regression guard: the `init <dir>` positional must NOT also appear in tags.
+func TestParseArgsInitDirNotCapturedAsTag(t *testing.T) {
+	c := parseArgs([]string{"init", "/tmp/x"})
+	for _, tg := range c.tags {
+		if tg == "/tmp/x" {
+			t.Errorf("dir leaked into tags: %v", c.tags)
+		}
+	}
+}
+
 // --- run: `skilldozer check` (P1.M4.T10.S1) ---
 
 // Clean store -> one OK line per skill + summary, exit 0, no ANSI, empty stderr.
@@ -1552,6 +1633,114 @@ func TestRunExclusivityCheckAndPath(t *testing.T) {
 	}
 	if !strings.Contains(errOut.String(), "check") || !strings.Contains(errOut.String(), "--path") {
 		t.Errorf("stderr=%q; want a message mentioning check and --path", errOut.String())
+	}
+}
+
+// --- run: `init` exclusivity (P1.M2.T1.S1) ---
+//
+// init is its own exclusive mode (PRD §6.3 / §8.2). These run-level tests need NO
+// store fixture / env: exclusivity runs BEFORE skillsdir.Find() (run step 4).
+
+// init + --list -> exit 2, empty stdout.
+func TestRunExclusivityInitAndList(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := run([]string{"init", "--list"}, &out, &errOut)
+	if code != 2 {
+		t.Fatalf("run(init --list): code=%d; want 2", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout=%q; want empty", out.String())
+	}
+	if !strings.Contains(errOut.String(), "init") {
+		t.Errorf("stderr=%q; want a message mentioning init", errOut.String())
+	}
+}
+
+// init + --path -> exit 2, empty stdout.
+func TestRunExclusivityInitAndPath(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := run([]string{"init", "--path"}, &out, &errOut)
+	if code != 2 {
+		t.Fatalf("run(init --path): code=%d; want 2", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout=%q; want empty", out.String())
+	}
+	if !strings.Contains(errOut.String(), "init") {
+		t.Errorf("stderr=%q; want a message mentioning init", errOut.String())
+	}
+}
+
+// init check: the GOTCHA #1 guard lets `check` reach its case (c.check) instead
+// of being swallowed as initStore, so exclusivity flags init+check -> exit 2.
+func TestRunExclusivityInitAndCheck(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := run([]string{"init", "check"}, &out, &errOut)
+	if code != 2 {
+		t.Fatalf("run(init check): code=%d; want 2", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout=%q; want empty", out.String())
+	}
+	if !strings.Contains(errOut.String(), "init") {
+		t.Errorf("stderr=%q; want a message mentioning init", errOut.String())
+	}
+}
+
+// init + --search <q> -> exit 2.
+func TestRunExclusivityInitAndSearch(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := run([]string{"init", "--search", "q"}, &out, &errOut)
+	if code != 2 {
+		t.Fatalf("run(init --search q): code=%d; want 2", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout=%q; want empty", out.String())
+	}
+}
+
+// init + --all -> exit 2.
+func TestRunExclusivityInitAndAll(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := run([]string{"init", "--all"}, &out, &errOut)
+	if code != 2 {
+		t.Fatalf("run(init --all): code=%d; want 2", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout=%q; want empty", out.String())
+	}
+}
+
+// `init foo bar`: foo -> initStore (consumed), bar -> tags (stray) -> init+tags
+// exit 2.
+func TestRunExclusivityInitAndStrayTag(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := run([]string{"init", "foo", "bar"}, &out, &errOut)
+	if code != 2 {
+		t.Fatalf("run(init foo bar): code=%d; want 2 (stray tag)", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout=%q; want empty", out.String())
+	}
+	if !strings.Contains(errOut.String(), "tag") {
+		t.Errorf("stderr=%q; want a message mentioning tag", errOut.String())
+	}
+}
+
+// --- run: --help advertises init + --store (P1.M2.T1.S1) ---
+
+// `--help` stdout must contain the init row and the --store option line.
+func TestRunHelpShowsInitRow(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := run([]string{"--help"}, &out, &errOut)
+	if code != 0 {
+		t.Fatalf("run(--help): code=%d; want 0", code)
+	}
+	got := out.String()
+	for _, want := range []string{"skilldozer init", "--store <dir>"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("run(--help) stdout missing %q:\n%s", want, got)
+		}
 	}
 }
 
