@@ -1752,6 +1752,39 @@ func TestRunExclusivityTagsAndAll(t *testing.T) {
 	}
 }
 
+// Issue 3 (P1.M2.T1.S1): tags + --path is now rejected like tags + --list/search/all.
+// Previously --path was omitted from the tags predicate, so `foo --path` silently ran
+// --path and dropped the tag (even NONEXISTENTTAG --path → exit 0). exclusivityError
+// runs before skillsdir.Find(), so no store fixture is needed.
+func TestRunExclusivityTagsAndPath(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := run([]string{"foo", "--path"}, &out, &errOut)
+	if code != 2 {
+		t.Fatalf("run(foo --path): code=%d; want 2 (Issue 3: tags + --path)", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout=%q; want empty", out.String())
+	}
+	if !strings.Contains(errOut.String(), "cannot be combined") {
+		t.Errorf("stderr=%q; want an exclusivity message", errOut.String())
+	}
+}
+
+// Reversed order: `--path foo` must also exit 2 (parseArgs captures flags/tags in any order).
+func TestRunExclusivityPathAndTag(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := run([]string{"--path", "foo"}, &out, &errOut)
+	if code != 2 {
+		t.Fatalf("run(--path foo): code=%d; want 2 (Issue 3, reversed order)", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout=%q; want empty", out.String())
+	}
+	if !strings.Contains(errOut.String(), "cannot be combined") {
+		t.Errorf("stderr=%q; want an exclusivity message", errOut.String())
+	}
+}
+
 // check + tag (check ignores tags so the combo is meaningless → exit 2).
 func TestRunExclusivityCheckAndTags(t *testing.T) {
 	var out, errOut bytes.Buffer
@@ -2158,6 +2191,23 @@ func TestExclusivityErrorListingModes(t *testing.T) {
 				t.Errorf("(%s) msg=%q; want it to contain 'mutually exclusive'", tc.name, msg)
 			}
 		})
+	}
+}
+
+// Issue 3 (P1.M2.T1.S1): the direct predicate test. Calls exclusivityError itself so
+// the fix is locked independent of parseArgs/run. (Not a case in TestExclusivityErrorListingModes:
+// that table asserts Contains("mutually exclusive"); a tags case returns "tags cannot be
+// combined", a different family.)
+func TestExclusivityErrorTagsAndPath(t *testing.T) {
+	bad, msg := exclusivityError(config{tags: []string{"foo"}, path: true})
+	if !bad {
+		t.Fatalf("exclusivityError(tags+path)=bad=false; want true (Issue 3: c.path was omitted)")
+	}
+	if !strings.Contains(msg, "tags cannot be combined") {
+		t.Errorf("msg=%q; want 'tags cannot be combined'", msg)
+	}
+	if !strings.Contains(msg, "--path") {
+		t.Errorf("msg=%q; want it to mention --path", msg)
 	}
 }
 
