@@ -851,16 +851,17 @@ func chooseStore(haveStore, cwd string, isTTY bool, defaultStore string, prompt 
 // resolveStore is the I/O-bearing wrapper around chooseStore that run()'s init
 // dispatch (P1.M2.T2.S3) calls. It supplies the real dependencies — os.Getwd(),
 // config.DefaultStore(), the os.Stdin TTY check (stdinIsTerminal), and a bufio
-// prompt reader over os.Stdin/os.Stdout (readPrompt) — and returns chooseStore's
+// prompt reader over os.Stdin/os.Stderr (readPrompt) — and returns chooseStore's
 // choice ABSOLUTIZED via filepath.Abs (PRD §8.2 "absolute store path"). The ONE
 // shared bufio.NewReader is created here and captured by the prompt closure so a
 // future second prompt would reuse it (external_deps.md §4: a fresh reader per
 // prompt can swallow buffered bytes).
 //
-// The os.Stdin / os.Stdout / os.Getwd access is confined to THIS function so the
-// pure decision logic in chooseStore stays terminal-free and unit-testable. A
-// genuine cwd/default/absolutize/prompt error is returned wrapped; an empty or
-// EOF prompt answer is NOT an error (readPrompt ⇒ default).
+// The os.Stdin / os.Stderr / os.Getwd access is confined to THIS function so the
+// pure decision logic in chooseStore stays terminal-free and unit-testable. The
+// prompt is written to stderr (not stdout) so init's stdout stays the bare store
+// path per PRD §6.1. A genuine cwd/default/absolutize/prompt error is returned
+// wrapped; an empty or EOF prompt answer is NOT an error (readPrompt ⇒ default).
 func resolveStore(haveStore string) (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -871,8 +872,12 @@ func resolveStore(haveStore string) (string, error) {
 		return "", fmt.Errorf("skilldozer init: resolve default store: %w", err)
 	}
 	r := bufio.NewReader(os.Stdin)
+	// Prompt dialog goes to stderr, not stdout. PRD §6.1 pins init's stdout to
+	// exactly the configured store path; the interactive "Where should skilldozer
+	// keep your skills? [default]:" line is user-facing prose, not result data,
+	// so a caller doing store="$(skilldozer init)" must not capture it.
 	prompt := func(label, def string) (string, error) {
-		return readPrompt(r, os.Stdout, label, def)
+		return readPrompt(r, os.Stderr, label, def)
 	}
 	store, err := chooseStore(haveStore, cwd, stdinIsTerminal(), def, prompt)
 	if err != nil {
