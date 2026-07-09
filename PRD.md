@@ -115,6 +115,7 @@ Binary name: **`skilldozer`**. Flags use POSIX double-dash long form + single-da
 | `skilldozer --search <q>` / `-s <q>` | Substring (case-insensitive) search over tag, frontmatter `name`, `description`, and `metadata.keywords`. | Same table format as `--list`, filtered. | `0`; `1` if no matches |
 | `skilldozer check` | Validate every skill on disk (see §9). | Report: `OK` lines + any `WARN`/`ERROR` lines. | `0` if clean; `1` if any ERROR |
 | `skilldozer init` | First-run setup (see §8.2): prompt for the skills store dir, create it if missing, write the config, seed a template if empty, validate. Non-interactive: `skilldozer init <dir>` / `skilldozer init --store <dir>`. | The configured store path. | `0` on success; `1` on error/cancel |
+| `skilldozer completion [--shell <name>]` | Emit the completion script for the current (or named) shell to **stdout**, for `eval "$(skilldozer completion)"`. See §14.6. | The shell's completion script (one text blob). | `0`; `1` if shell undetectable; `2` if `--shell` value unsupported |
 | `skilldozer --path` / `-p` | Where is `skilldozer` looking? | Absolute path of the resolved skills dir. | `0` (`1` if unresolvable) |
 | `skilldozer --help` / `-h` | Usage. | Help text (to stdout). | `0` |
 | `skilldozer --version` / `-v` | Version. | `skilldozer <version>` (single line). | `0` |
@@ -129,15 +130,19 @@ Binary name: **`skilldozer`**. Flags use POSIX double-dash long form + single-da
 
 ### 6.3 Default behavior
 
-- **No arguments and no flag** ⇒ print usage to **stderr**, exit `1` (parity with `get-server-config.sh`). (`skilldozer` with just `--help` prints usage to stdout, exit 0.)
+- **No arguments and no flag** ⇒ print usage to **stdout**, exit `0`. Bare invocation is **implicit `--help`** (skilldozer has no default action), chosen so `skilldozer | grep …` works — the help must land on the piped stream to be grep-friendly. (`skilldozer --help` / `-h` likewise prints usage to stdout, exit 0.) *(Previously stderr/exit-1 “parity with `get-server-config.sh`”; overridden — §19, decision 17.)*
 - `--help` / `--version` take precedence over everything else.
 - Mixing `<tag>` with `--list`/`--search`/`--all` is an error (exit 2): these are mutually exclusive modes.
+- `completion` is a **reserved subcommand** (like `check`/`init`): `skilldozer completion` emits a shell completion script (§14.6) and is mutually exclusive with tags and other modes. A skill literally tagged `completion` resolves only via its full tag. The §6.1 usage block lists it alongside `check`/`init`.
 
 ### 6.4 Error semantics (critical for `$(...)` use)
+
+> Bare no-args is **not** an error — it is implicit help (stdout, exit 0; see §6.3). The stderr / non-zero contract below applies to **genuine failures only**. That stream separation is exactly what lets `skilldozer | grep …` work: the help is on stdout, the failures stay on stderr.
 
 - **Any** unresolved/ambiguous tag in a `skilldozer <tag>...` invocation ⇒ print **one** error line per problem tag to stderr, print **nothing** to stdout, exit `1`. This guarantees `pi --skill "$(skilldozer badtag)"` fails loudly rather than passing a garbage path.
 - Ambiguous tag (a short name matching >1 skill) ⇒ stderr lists the candidate full tags, exit `1`.
 - Skills dir cannot be located / skilldozer is unconfigured ⇒ stderr: `skilldozer is not configured; run \`skilldozer init\`` (or, if configured but the dir vanished, the concise reason + fix), exit `1`. Bare tag resolution **never** prompts (see §8.2), so `pi --skill "$(skilldozer x)"` fails loudly instead of hanging inside command substitution.
+- `skilldozer completion` cannot determine the shell (no `--shell`, no `$SKILLDOZER_SHELL`, no usable `$SHELL`) ⇒ stderr: `could not detect shell; pass --shell {bash\|zsh\|fish}`, exit `1`. An unsupported `--shell <name>` value (not bash/zsh/fish) ⇒ stderr error, exit `2`. On success the script goes to **stdout** (for `eval`); nothing else.
 
 ---
 
@@ -362,6 +367,20 @@ out=$(./skilldozer nope 2>/dev/null); rc=$?
 # Absolute-path contract (default)
 case "$(./skilldozer example)" in /*) echo "absolute OK";; *) echo "FAIL"; exit 1;; esac
 
+# Grepability contract (§6.3): no-args help is on stdout, exit 0 — pipes MUST see it
+out=$(./skilldozer 2>/dev/null); rc=$?
+[ "$rc" = "0" ] && printf '%s' "$out" | grep -qi 'USAGE' && echo "no-args-help-on-stdout OK" || { echo "FAIL"; exit 1; }
+test -z "$(./skilldozer 2>&1 >/dev/null)"   # no-args writes NOTHING to stderr
+
+# `completion` subcommand (§14.6): emits the matching script to stdout; --shell forces one
+./skilldozer completion --shell bash 2>/dev/null | grep -q '_skilldozer_completion' && echo "completion-bash OK" || { echo "FAIL"; exit 1; }
+./skilldozer completion --shell fish 2>/dev/null | grep -q 'complete -c skilldozer' && echo "completion-fish OK" || { echo "FAIL"; exit 1; }
+# detection failure (no --shell, no $SHELL) ⇒ stderr + exit 1, nothing on stdout
+out=$(env -u SHELL -u SKILLDOZER_SHELL ./skilldozer completion 2>cerr); rc=$?
+[ -z "$out" ] && [ "$rc" = "1" ] && grep -qi 'shell' cerr && echo "completion-no-shell OK" || { echo "FAIL"; exit 1; }
+# unsupported --shell value ⇒ exit 2
+./skilldozer completion --shell tcsh >/dev/null 2>&1; [ "$?" = "2" ] && echo "completion-bad-shell OK" || { echo "FAIL"; exit 1; }
+
 # Validation
 ./skilldozer check                           # exits 0, reports the example as OK
 
@@ -396,12 +415,90 @@ All of the above must pass. The pi line must show the skill loaded with **`--no-
 
 ## 14. Shell completions
 
-Ship completions for bash, zsh, fish (parity with mcpeepants). They complete:
+Ship **dynamic** completions for bash, zsh, and fish, in the `completions/` directory (§5):
 
-- Subcommands/flags after `skilldozer ` / `skilldozer --`.
-- **Tags** by invoking `skilldozer --all` (cheap, disk-derived) for positional completion.
+| Shell | File |
+|---|---|
+| bash | `completions/skilldozer.bash` |
+| zsh  | `completions/_skilldozer` |
+| fish | `completions/skilldozer.fish` |
 
-Keep them simple: a function that runs `skilldozer --all` and offers the printed paths' basename-or-relTag. Provide an `install.sh` step (already in §12) OR a short note in README to source/copy the completion file. If time-boxed, completions are the **only** deliverable that may be deferred — flag it clearly in the PR if so.
+"Dynamic" is load-bearing: the tag list is **never** a frozen static list, because the store is manifest-free (§2, constraint 1: the catalog is always walked from disk). Completions therefore derive the tag set fresh, on every keystroke, from disk.
+
+### 14.1 What they complete
+
+- **Tags (positional args)** — run `skilldozer --relative --all` and offer its stdout verbatim (canonical relTags, one per line). No caching: a newly-dropped skill directory is completable immediately.
+- **Flags** — the full flag matrix from §6.1/§6.2, with short forms where they exist and `--relative`, `--no-color`, `--store` exposed as **long-only** (no short form).
+- **Exclusive subcommands** `check` and `init` — offered **only as the first arg**; once either is seen, tag completion is suppressed (mirrors §6.3 mutual exclusivity).
+- **Nothing else.** skilldozer takes tags/flags, never file paths, so each file sets a global no-file-completion rule (e.g. fish `complete -c skilldozer -f`).
+
+### 14.2 Value-taking flag handling
+
+The two value-taking flags are treated as **intentional inverses**:
+
+- `--search`/`-s` — free-text query → offer **nothing** (offering tags here would be wrong).
+- `--store <dir>` (§8.2) — a directory value → offer **file/dir completion**.
+
+### 14.3 Robustness
+
+The `skilldozer --relative --all` probe must swallow its own errors (`2>/dev/null`): a missing or broken binary yields an **empty** tag list on the completion path, never a stderr dump that corrupts the shell completion UI.
+
+### 14.4 Lockstep invariant (guardrail)
+
+There is no shared source of truth the shells can import. The flag set in each completion file is **frozen to `main.go parseArgs()`**: if a future task adds, removes, or renames a flag there, update **all three** files identically. Carry this forward as a §17 guardrail.
+
+### 14.5 Installation
+
+`install.sh` (§12.1) deliberately does **not** install completions — they are a separate, shell-specific concern and the binary must not write outside its target bin dir. Users source/copy the file they want.
+
+**bash** (one of):
+```bash
+source /path/to/skilldozer/completions/skilldozer.bash
+cp completions/skilldozer.bash ~/.local/share/bash-completion/completions/skilldozer
+cp completions/skilldozer.bash /etc/bash_completion.d/skilldozer
+```
+
+**zsh** (one of):
+```bash
+cp completions/_skilldozer ~/.zsh/completions/_skilldozer
+cp completions/_skilldozer /usr/local/share/zsh/site-functions/_skilldozer
+```
+then ensure this is in `~/.zshrc`:
+```bash
+autoload -U compinit && compinit
+```
+
+**fish**:
+```bash
+cp completions/skilldozer.fish ~/.config/fish/completions/skilldozer.fish
+```
+
+> Completions are **shipped** (no longer deferrable). The earlier "may be deferred if time-boxed" caveat is obsolete.
+
+### 14.6 `completion` subcommand — load into your shell
+
+`skilldozer completion` emits the completion script for the target shell to **stdout**, wired into the user's rc file with the standard `eval`/`source` idiom:
+
+```bash
+# bash / zsh (~/.bashrc / ~/.zshrc)
+eval "$(skilldozer completion)"
+
+# fish (~/.config/fish/config.fish)
+skilldozer completion --shell fish | source
+```
+
+> **Why emit + `eval`, not "install":** a child process **cannot** register completions in the parent shell that invoked it — only the shell itself can define its completion functions, by eval'ing/sourcing the script **in its own process**. So `completion` *emits* the script (to stdout, for the parent to `eval`); it writes **no files** and edits **no rc files**. This is the same idiom as `zoxide init`, `starship init`, and `direnv hook`, and it keeps the binary side-effect-free — fully consistent with §14.5. (A heavier `--install` mode that appends to rc files was considered and deferred; it would revisit §14.5's "binary writes nothing" stance.)
+
+**Shell detection** (first wins):
+
+1. `--shell <bash|zsh|fish>` — explicit; required for deterministic `eval`.
+2. `$SKILLDOZER_SHELL` — env override.
+3. `basename("$SHELL")` — the login shell (correct in the common case).
+4. None ⇒ stderr message + exit `1` (§6.4).
+
+**Embedding (self-sufficient binary).** The three scripts in `completions/` are compiled into the binary with `//go:embed` (stdlib, **no new dependency**). This makes `completion` work for `go install` users with **no repo clone** — consistent with the "binary is self-sufficient" decision (§12.2 / decision 9). The on-disk `completions/` files remain the **single source of truth**; §14.5's manual source/copy path and this subcommand emit identical bytes (both read the same files).
+
+**Lockstep (extends §14.4).** Because the scripts are baked in at build time, editing `completions/*` requires a **rebuild** for `completion` to reflect it — whereas the §14.5 manual source/copy path picks up edits immediately. Keep both delivery paths in sync; the §14.4 flag-change rule applies to the embedded bytes too.
 
 ---
 
@@ -442,6 +539,7 @@ Mirror the mcpeepants README's tone and structure:
 - ❌ Do **not** print anything to stdout on a failed/unknown tag resolution (breaks `pi --skill "$(skilldozer x)"`).
 - ❌ Do **not** require Node, Python, or any runtime at *run* time (build-time `go` is fine).
 - ❌ Do **not** ship more than the one example skill.
+- ⚠️ **Completion lockstep:** when adding/renaming/removing a flag in `main.go parseArgs()`, update all three completion files (`skilldozer.bash`, `_skilldozer`, `skilldozer.fish`) identically — there is no shared source of truth the shells import (§14.4).
 
 ---
 
@@ -478,3 +576,5 @@ Mirror the mcpeepants README's tone and structure:
 | 14 | Discovery order | env `SKILLDOZER_SKILLS_DIR` → config `store` → sibling of binary → walk-up → "run `skilldozer init`" | Env overrides config for CI/tests; heuristics kept as zero-config dev fallbacks |
 | 15 | Name | **Skilldozer** (binary `skilldozer`, env prefix `SKILLDOZER_`, module `github.com/dabstractor/skilldozer`) | Renamed from the `skpp` working title. `plan/` archive left as historical (it *was* skpp when written) |
 | 16 | `init` cwd auto-detect | If cwd contains any `SKILL.md` (any depth), default the store to cwd; else `$XDG_DATA_HOME/skilldozer/skills` | Run `skilldozer init` inside an existing skills dir and it adopts it in place, no typing |
+| 17 | No-args invocation | Bare `skilldozer` ⇒ usage to **stdout**, exit **0** (implicit `--help`) | Earlier: stderr/exit-1 (“parity with `get-server-config.sh`”). Overridden so `skilldozer \| grep …` works — the help must land on the piped stream. Only no-args is reclassified (error→help); genuine failures (unknown flag, mutually-exclusive modes, unresolved tag, unconfigured) stay on stderr, non-zero, preserving the §6.4 `$(...)` contract. |
+| 18 | `completion` delivery | **Emit script to stdout for `eval`** (`eval "$(skilldozer completion)"`); scripts `//go:embed`-ded into the binary; **no** rc/file writes; `--shell` overrides `$SKILLDOZER_SHELL`/`$SHELL` detection | A child process cannot register completions in the parent shell — only the shell can, by eval'ing the script in its own process (idiom: `zoxide init`/`starship init`/`direnv hook`). Emitting keeps the binary side-effect-free (§14.5). Embedding makes it work for `go install` users with no clone (decision 9). `--install` (write rc) deferred — would revisit §14.5. |
