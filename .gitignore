@@ -3,3 +3,6 @@
 *.test
 *.out
 .DS_Store
+.pi
+.pi-*
+.claude
