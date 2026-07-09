@@ -274,20 +274,21 @@ func TestRunVersionPrecedenceOverPath(t *testing.T) {
 
 // --- run: default (no recognized flag) ---
 
-// No args → usage to STDERR, exit 1, stdout empty (PRD §6.3: parity with
-// get-server-config.sh). The same usageText is used for --help (stdout/exit 0)
-// and no-args (stderr/exit 1); only the destination differs.
+// No args → usage to STDOUT, exit 0 (PRD §6.3 / §19 decision 17: bare invocation
+// is implicit --help), stderr empty (§13 Grepability contract: `skilldozer | grep …`
+// must see the help on the piped stream). The same usageText is used for --help
+// (stdout/exit 0) and no-args (now stdout/exit 0).
 func TestRunDefaultNoArgs(t *testing.T) {
 	var out, errOut bytes.Buffer
 	code := run(nil, &out, &errOut)
-	if code != 1 {
-		t.Errorf("run(nil): code=%d; want 1 (no-args → stderr usage, exit 1)", code)
+	if code != 0 {
+		t.Errorf("run(nil): code=%d; want 0 (no-args → stdout usage, implicit --help)", code)
 	}
-	if out.Len() != 0 {
-		t.Errorf("run(nil) stdout=%q; want EMPTY (usage goes to stderr)", out.String())
+	if !strings.Contains(out.String(), "USAGE") {
+		t.Errorf("run(nil) stdout=%q; want the USAGE block on stdout (§6.3)", out.String())
 	}
-	if !strings.Contains(errOut.String(), "USAGE") {
-		t.Errorf("run(nil) stderr=%q; want the USAGE block", errOut.String())
+	if errOut.Len() != 0 {
+		t.Errorf("run(nil) stderr=%q; want EMPTY (no-args writes nothing to stderr)", errOut.String())
 	}
 }
 
@@ -1666,18 +1667,19 @@ func TestRunHelpBeatsVersion(t *testing.T) {
 // --- run: no-args / modifiers-only (P1.M5.T11.S1) ---
 
 // Modifiers-only with no mode (e.g. `--no-color` alone) is the SAME as no-args:
-// skilldozer was asked to DO nothing → usage to stderr, exit 1, stdout empty.
+// skilldozer was asked to DO nothing → usage to stdout, exit 0 (implicit --help,
+// PRD §6.3 / §19 decision 17), stderr empty.
 func TestRunModifiersOnlyNoMode(t *testing.T) {
 	var out, errOut bytes.Buffer
 	code := run([]string{"--no-color"}, &out, &errOut)
-	if code != 1 {
-		t.Errorf("run(--no-color): code=%d; want 1 (no mode → stderr usage)", code)
+	if code != 0 {
+		t.Errorf("run(--no-color): code=%d; want 0 (no mode → stdout usage, implicit --help)", code)
 	}
-	if out.Len() != 0 {
-		t.Errorf("stdout=%q; want empty", out.String())
+	if !strings.Contains(out.String(), "USAGE") {
+		t.Errorf("stdout=%q; want the USAGE block on stdout (§6.3)", out.String())
 	}
-	if !strings.Contains(errOut.String(), "USAGE") {
-		t.Errorf("stderr=%q; want usage block", errOut.String())
+	if errOut.Len() != 0 {
+		t.Errorf("stderr=%q; want EMPTY (modifiers-only writes nothing to stderr)", errOut.String())
 	}
 }
 

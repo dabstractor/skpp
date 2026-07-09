@@ -48,7 +48,8 @@ var version = "dev"
 // pi --skill "$(skilldozer <tag>)" one-liner. It is emitted PLAIN (no ANSI):
 // `skilldozer --help | grep` must work, §13 does not assert on help color, and tests
 // use non-TTY buffers. The SAME text is printed to stdout for --help (exit 0) and
-// to stderr for the no-args default (exit 1) — only the destination differs.
+// for the no-args/modifiers-only default (exit 0 — implicit --help, PRD §6.3 / §19
+// decision 17); genuine failures go to stderr (§6.4), never this text.
 const usageText = `skilldozer — skill path printer
 
 Resolve skill tags to on-disk skill directory paths (manifest-free).
@@ -415,10 +416,10 @@ func expandShortBundle(c *config, a string, args []string, i int) (consumeNext, 
 //
 // Exit codes (PRD §6; final §6.1–§6.4 matrix):
 //   - 0: --help printed usage to stdout; --version printed; --path/--list/--search
-//     succeeded; all <tag>s resolved; --all printed the store; check passed
+//     succeeded; all <tag>s resolved; --all printed the store; check passed;
+//     no-args/modifiers-only printed usage to stdout (implicit --help, §6.3)
 //   - 1: --path/--list failed or had no skills; ANY <tag> unresolved/ambiguous
-//     (nothing on stdout); skills dir unresolvable; no recognized mode (usage to
-//     stderr)
+//     (nothing on stdout); skills dir unresolvable
 //   - 2: unknown flag; mutually-exclusive modes mixed (tags+mode, check+tags,
 //     check+mode)
 //
@@ -692,12 +693,13 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 
-	// No recognized mode → usage to STDERR, exit 1 (PRD §6.3: parity with
-	// get-server-config.sh). Covers both truly-no-args and modifiers-only (e.g.
-	// `skilldozer --no-color`): if skilldozer was asked to DO nothing, show usage. stdout stays
-	// empty so $(...) never sees garbage.
-	fmt.Fprint(stderr, usage())
-	return 1
+	// No recognized mode → usage to STDOUT, exit 0 (PRD §6.3 / §19 decision 17:
+	// bare invocation is implicit --help). Covers both truly-no-args and
+	// modifiers-only (e.g. `skilldozer --no-color`): if skilldozer was asked to DO
+	// nothing, show usage. The help lands on stdout so `skilldozer | grep …` works;
+	// genuine failures stay on stderr (§6.4).
+	fmt.Fprint(stdout, usage())
+	return 0
 }
 
 // exclusivityError reports whether c combines modes that PRD §6.3 forbids,

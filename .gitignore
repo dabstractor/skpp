@@ -1,8 +1,18 @@
 /skilldozer
 /dist
+/build
 *.test
 *.out
 .DS_Store
+
+# Dependencies
+node_modules/
+/venv
+
+# Environment files
+.env
+.env.*
+
 .pi
 .pi-*
 .claude
