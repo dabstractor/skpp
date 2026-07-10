@@ -49,7 +49,7 @@ _skilldozer_completion() {
     # as the FIRST positional token.
     local i have_pos=0
     for ((i=1; i<cword; i++)); do
-        [[ "${words[i]}" == "check" || "${words[i]}" == "init" ]] && return 0
+        [[ "${words[i]}" == "check" || "${words[i]}" == "init" || "${words[i]}" == "completion" ]] && return 0
         [[ "${words[i]}" == -* ]] && continue
         have_pos=1
     done
@@ -60,7 +60,7 @@ _skilldozer_completion() {
     local tags cands
     tags=$(skilldozer --relative --all 2>/dev/null)
     cands="$tags"
-    (( have_pos == 0 )) && cands="$cands check init"
+    (( have_pos == 0 )) && cands="$cands check init completion"
     # SC2207 (mapfile preferred) is acceptable here: tags and flags never
     # contain spaces, so word-splitting is safe.
     COMPREPLY=($(compgen -W "$cands" -- "$cur"))

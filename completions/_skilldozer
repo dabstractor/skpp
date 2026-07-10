@@ -43,13 +43,13 @@ _skilldozer() {
     case "$state" in
         first)
             # check AND init are offered ONLY as the first positional token.
-            compadd -- "$tags[@]" check init
+            compadd -- "$tags[@]" check init completion
             ;;
         rest)
             # `check` AND `init` are exclusive (PRD §6.3: either+tags → exit 2).
             # Once one is seen, suppress tags so completion never invites a
             # guaranteed error.
-            if (( ${words[(I)check]} || ${words[(I)init]} )); then
+            if (( ${words[(I)check]} || ${words[(I)init]} || ${words[(I)completion]} )); then
                 _message 'subcommand takes no tag arguments'
             else
                 compadd -- "$tags[@]"

@@ -42,10 +42,11 @@ complete -c skilldozer -l store -d 'Non-interactive store path for init' -r
 # the first arg.
 complete -c skilldozer -n '__fish_is_first_arg' -a 'check' -d 'Validate every skill on disk'
 complete -c skilldozer -n '__fish_is_first_arg' -a 'init' -d 'First-run setup: pick/create the skills store and write the config'
+complete -c skilldozer -n '__fish_is_first_arg' -a 'completion' -d 'Emit the shell completion script for eval'
 
 # Dynamic tags: ONE directive with command substitution (NOT a hardcoded line per
 # tag — the store is manifest-free and changes as skills are added). Suppressed
 # once `check` OR `init` is seen (exclusive subcommand, PRD §6.3) AND when the
 # previous arg is --search/-s (free-text query — no tag completion there either).
-complete -c skilldozer -n 'not __fish_seen_subcommand_from check init; and not __fish_prev_arg_in --search -s' \
+complete -c skilldozer -n 'not __fish_seen_subcommand_from check init completion; and not __fish_prev_arg_in --search -s' \
     -a '(skilldozer --relative --all 2>/dev/null)' -d 'skill tag'
