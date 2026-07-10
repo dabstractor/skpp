@@ -45,7 +45,7 @@
           "type": "Milestone",
           "id": "P1.M2",
           "title": "`completion` subcommand: parse, dispatch, embed, detect shell",
-          "status": "Planned",
+          "status": "Researching",
           "description": "The bulk of the delta. Add the `completion` reserved subcommand to main.go: config fields, parseArgs token + --shell flag handling, exclusivity, run() dispatch, //go:embed of the three completion scripts, shell detection, and the usageText updates. Depends on M1's stream discipline (completion writes the script ONLY to stdout; errors ONLY to stderr).",
           "tasks": [
             {
@@ -81,14 +81,14 @@
               "type": "Task",
               "id": "P1.M2.T2",
               "title": "`//go:embed`, dispatch, and shell detection",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Wire the completion subcommand end-to-end: embed the three completion scripts via //go:embed, add the run() dispatch slot, implement shell detection (--shell → $SKILLDOZER_SHELL → basename($SHELL) → exit 1) and the exit-code matrix (unsupported --shell value → exit 2).",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T2.S1",
                   "title": "Embed the three completion scripts + completionScript() function",
-                  "status": "Ready",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/003_3ace946c2a5c/architecture/external_deps.md for verified embed details. CRITICAL: `//go:embed completions/_skilldozer` works WITHOUT `all:` prefix — confirmed by live test and Go source analysis (explicit file paths bypass the `_`/`.` exclusion which only applies to directory-walk patterns). Three `string` vars is the idiomatic pattern for 3 known static files.\n2. INPUT: The three completion files exist at `completions/skilldozer.bash` (69 lines), `completions/_skilldozer` (59 lines, zsh), `completions/skilldozer.fish` (51 lines). They are the single source of truth (PRD §14.6). main.go currently has NO `//go:embed` directives anywhere (the only embed-adjacent comment is at main.go:962, which is about the init seed template being a STRING CONSTANT not go:embed — unrelated). The `var version = \"dev\"` declaration is at main.go:43.\n3. LOGIC: Implement PRD §14.6 embedding. Add `import _ \"embed\"` to the import block (if not already imported). Add THREE package-scope var declarations with `//go:embed` directives (the directive MUST immediately precede the var, with only blank lines/comments between). Place them near `var version` at main.go:43, after imports:\n   ```go\n   //go:embed completions/skilldozer.bash\n   var bashCompletion string\n   //go:embed completions/_skilldozer\n   var zshCompletion string\n   //go:embed completions/skilldozer.fish\n   var fishCompletion string\n   ```\n   Add a `completionScript(shell string) (string, bool)` function (near the other helpers, e.g. before runInit at main.go:1057): switch on shell, return the matching embedded string + true; return \"\", false for unsupported shells. The on-disk files are the single source of truth; this embeds them verbatim (PRD §14.6: 'both read the same files').\n   Verify with `go vet ./... && go build ./...` — if the `_skilldozer` embed failed, the build would error with 'pattern completions/_skilldozer: no matching files found' (it will not, per research).\n4. OUTPUT: Three package-scope `string` vars holding the verbatim completion scripts, plus a `completionScript(shell) (string, bool)` function that maps \"bash\"→bashCompletion, \"zsh\"→zshCompletion, \"fish\"→fishCompletion. Available for consumption by P1.M2.T2.S2's `runCompletion`.\n5. DOCS: [Mode A] none beyond code — the embed is an internal implementation detail, not a user-facing/config/API surface change.",
@@ -102,7 +102,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T2.S2",
                   "title": "`run()` dispatch + shell detection + exit codes",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M2.T1.S1",

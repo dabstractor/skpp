@@ -14,6 +14,7 @@ package main
 
 import (
 	"bufio"
+	_ "embed"
 	"fmt"
 	"io"
 	"os"
@@ -41,6 +42,23 @@ import (
 // (compile error) or a function-local. Because this file is `package main`, the
 // linker symbol path is `main.version` (NOT the module import path).
 var version = "dev"
+
+// Embedded shell-completion scripts (PRD §14.6 "Embedding (self-sufficient binary)"). The
+// on-disk completions/* files are the single source of truth; these vars embed them verbatim
+// so `completion` works for go install users with no repo clone (no runtime file I/O). embed is
+// stdlib (Go 1.16+; no new dependency). Three string vars (not embed.FS): the files are static
+// and known, so a trivial switch in completionScript is simpler than runtime ReadFile lookups.
+// NOTE: completions/_skilldozer embeds WITHOUT an `all:` prefix — Go's _/. exclusion applies
+// only to directory-walk patterns, not explicit file paths (verified).
+//
+//go:embed completions/skilldozer.bash
+var bashCompletion string
+
+//go:embed completions/_skilldozer
+var zshCompletion string
+
+//go:embed completions/skilldozer.fish
+var fishCompletion string
 
 // usageText is the full --help / no-args usage block (PRD §6.1, §6.3). It mirrors
 // the STRUCTURE of mcpeepants get-server-config.sh (USAGE / EXAMPLES / OPTIONS,
@@ -1081,6 +1099,24 @@ func setupStore(store, configPath string) (seeded bool, err error) {
 		return false, fmt.Errorf("skilldozer init: write config %q: %w", configPath, err)
 	}
 	return seeded, nil
+}
+
+// completionScript returns the embedded shell-completion script for shell ("bash"/"zsh"/
+// "fish") and true; for any other shell it returns ("", false). It is a pure switch over the
+// package-scope //go:embed vars (PRD §14.6) — no filesystem access. The bool lets runCompletion
+// (P1.M2.T2.S2) distinguish a known shell from an unsupported one (the §6.4 exit-2 path).
+// The bytes are verbatim from completions/* (the single source of truth); see
+// TestEmbeddedCompletionsMatchOnDisk for the byte-identity lock.
+func completionScript(shell string) (string, bool) {
+	switch shell {
+	case "bash":
+		return bashCompletion, true
+	case "zsh":
+		return zshCompletion, true
+	case "fish":
+		return fishCompletion, true
+	}
+	return "", false
 }
 
 // runInit is the `skilldozer init` orchestrator (PRD §8.2). run()'s dispatch calls it

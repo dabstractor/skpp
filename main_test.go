@@ -2883,3 +2883,67 @@ func TestRunBareTagUnconfiguredNeverPrompts(t *testing.T) {
 		}
 	}
 }
+
+// completionScript maps each supported shell to its embedded script + true (PRD §14.6). The
+// shell-unique header substring guards against a swapped //go:embed directive (the bash header
+// must come from bashCompletion, not zshCompletion). Pure switch over package-scope vars —
+// no store/env/run; completionScript is uncalled until P1.M2.T2.S2 wires runCompletion.
+func TestCompletionScriptMapping(t *testing.T) {
+	cases := []struct{ shell, header string }{
+		{"bash", "# Bash completion for skilldozer."},
+		{"zsh", "#compdef skilldozer"},
+		{"fish", "# Fish completion for skilldozer."},
+	}
+	for _, tc := range cases {
+		got, ok := completionScript(tc.shell)
+		if !ok {
+			t.Errorf("completionScript(%q): ok=false; want true", tc.shell)
+			continue
+		}
+		if got == "" {
+			t.Errorf("completionScript(%q): empty script; want the embedded bytes", tc.shell)
+		}
+		if !strings.Contains(got, tc.header) {
+			t.Errorf("completionScript(%q): missing header %q (possible swapped embed?)", tc.shell, tc.header)
+		}
+	}
+}
+
+// TestCompletionScriptUnsupportedShell locks the false return runCompletion (P1.M2.T2.S2)
+// will use to emit the PRD §6.4 "unsupported shell" exit-2 path.
+func TestCompletionScriptUnsupportedShell(t *testing.T) {
+	got, ok := completionScript("powershell")
+	if ok {
+		t.Errorf("completionScript(powershell): ok=true; want false")
+	}
+	if got != "" {
+		t.Errorf("completionScript(powershell): got %q; want empty", got)
+	}
+}
+
+// PRD §14.6: the on-disk completions/* files are the single source of truth and the embed
+// must emit identical bytes ("both read the same files"). This locks that invariant: each
+// embedded var is byte-identical to its source file. go test runs from the repo root
+// (package main's dir), so the relative completions/ path resolves. Catches a swapped
+// directive or future post-processing drift.
+func TestEmbeddedCompletionsMatchOnDisk(t *testing.T) {
+	cases := []struct{ shell, path string }{
+		{"bash", "completions/skilldozer.bash"},
+		{"zsh", "completions/_skilldozer"},
+		{"fish", "completions/skilldozer.fish"},
+	}
+	for _, tc := range cases {
+		embedded, ok := completionScript(tc.shell)
+		if !ok {
+			t.Fatalf("completionScript(%q): ok=false; want true", tc.shell)
+		}
+		onDisk, err := os.ReadFile(tc.path)
+		if err != nil {
+			t.Fatalf("os.ReadFile(%s): %v (test must run from the repo root)", tc.path, err)
+		}
+		if embedded != string(onDisk) {
+			t.Errorf("completionScript(%q) != on-disk %s: embed is %d bytes, file is %d bytes (§14.6 byte-identity violated)",
+				tc.shell, tc.path, len(embedded), len(onDisk))
+		}
+	}
+}
