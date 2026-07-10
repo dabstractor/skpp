@@ -1381,6 +1381,66 @@ func TestParseArgsStoreNoValueNoInitTokenSetsSignal(t *testing.T) {
 	}
 }
 
+// --- parseArgs: `skilldozer completion` + `--shell` (P1.M2.T1.S1) ---
+
+// `completion` alone is a RESERVED subcommand (like `check`): sets c.completion
+// and is NOT captured as a tag. (Dispatch/emission is P1.M2.T2; these tests are
+// parseArgs-level only.)
+func TestParseArgsCompletionSubcommand(t *testing.T) {
+	c := parseArgs([]string{"completion"})
+	if !c.completion {
+		t.Errorf("parseArgs(completion): completion=false; want true")
+	}
+	if len(c.tags) != 0 {
+		t.Errorf("parseArgs(completion): tags=%v; want empty ('completion' is a subcommand, not a tag)", c.tags)
+	}
+	if c.completionShell != "" {
+		t.Errorf("parseArgs(completion): completionShell=%q; want empty", c.completionShell)
+	}
+}
+
+// `completion --shell bash` long form: --shell fills completionShell (completion
+// already set). --shell implies completion (mirrors --store implies init).
+func TestParseArgsCompletionShellLongForm(t *testing.T) {
+	c := parseArgs([]string{"completion", "--shell", "bash"})
+	if !c.completion {
+		t.Errorf("completion not set")
+	}
+	if c.completionShell != "bash" {
+		t.Errorf("completionShell=%q; want bash", c.completionShell)
+	}
+	if len(c.tags) != 0 {
+		t.Errorf("tags=%v; want empty", c.tags)
+	}
+}
+
+// `completion --shell=bash` '='-form: --shell fills completionShell.
+func TestParseArgsCompletionShellEqualsForm(t *testing.T) {
+	c := parseArgs([]string{"completion", "--shell=bash"})
+	if !c.completion {
+		t.Errorf("completion not set")
+	}
+	if c.completionShell != "bash" {
+		t.Errorf("completionShell=%q; want bash", c.completionShell)
+	}
+}
+
+// `--shell bash` with NO `completion` token still implies completion (mirrors
+// `--store <dir>` implying init): --shell sets BOTH c.completion=true AND
+// c.completionShell. (GOTCHA C.)
+func TestParseArgsShellImpliesCompletion(t *testing.T) {
+	c := parseArgs([]string{"--shell", "bash"})
+	if !c.completion {
+		t.Errorf("--shell should set completion=true; got false")
+	}
+	if c.completionShell != "bash" {
+		t.Errorf("completionShell=%q; want bash", c.completionShell)
+	}
+	if len(c.tags) != 0 {
+		t.Errorf("tags=%v; want empty", c.tags)
+	}
+}
+
 // Regression guard: the `init <dir>` positional must NOT also appear in tags.
 func TestParseArgsInitDirNotCapturedAsTag(t *testing.T) {
 	c := parseArgs([]string{"init", "/tmp/x"})
@@ -1974,6 +2034,93 @@ func TestRunHelpShowsInitRow(t *testing.T) {
 	}
 	got := out.String()
 	for _, want := range []string{"skilldozer init", "--store <dir>"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("run(--help) stdout missing %q:\n%s", want, got)
+		}
+	}
+}
+
+// --- run: `completion` exclusivity (P1.M2.T1.S1) ---
+//
+// completion is its own exclusive mode (PRD §6.3 / §14.6: like check/init). These
+// run-level tests need NO store fixture / env: exclusivity runs BEFORE
+// skillsdir.Find() (run step 4).
+
+// completion + a stray tag -> exit 2, empty stdout.
+func TestRunExclusivityCompletionAndTag(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := run([]string{"completion", "example"}, &out, &errOut)
+	if code != 2 {
+		t.Fatalf("run(completion example): code=%d; want 2 (completion + tag)", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout=%q; want empty", out.String())
+	}
+	if !strings.Contains(errOut.String(), "completion") {
+		t.Errorf("stderr=%q; want a message mentioning completion", errOut.String())
+	}
+}
+
+// completion + --list -> exit 2, empty stdout.
+func TestRunExclusivityCompletionAndList(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := run([]string{"completion", "--list"}, &out, &errOut)
+	if code != 2 {
+		t.Fatalf("run(completion --list): code=%d; want 2", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout=%q; want empty", out.String())
+	}
+	if !strings.Contains(errOut.String(), "completion") {
+		t.Errorf("stderr=%q; want a message mentioning completion", errOut.String())
+	}
+}
+
+// `check completion`: both reserved tokens reach their own cases (c.check +
+// c.completion); the completion family catches c.completion && c.check -> exit 2.
+func TestRunExclusivityCheckAndCompletion(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := run([]string{"check", "completion"}, &out, &errOut)
+	if code != 2 {
+		t.Fatalf("run(check completion): code=%d; want 2", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout=%q; want empty", out.String())
+	}
+	if !strings.Contains(errOut.String(), "completion") {
+		t.Errorf("stderr=%q; want a message mentioning completion", errOut.String())
+	}
+}
+
+// `init completion`: GOTCHA A — the init-guard extension (`&& next !=
+// "completion"`) lets "completion" reach its case (c.completion) instead of being
+// swallowed as initStore, so the completion family catches c.completion && c.init
+// -> exit 2 (consistent with `init check` / `init init`).
+func TestRunExclusivityInitAndCompletion(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := run([]string{"init", "completion"}, &out, &errOut)
+	if code != 2 {
+		t.Fatalf("run(init completion): code=%d; want 2 (GOTCHA A: init-guard must defer completion to its case)", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout=%q; want empty", out.String())
+	}
+	if !strings.Contains(errOut.String(), "completion") {
+		t.Errorf("stderr=%q; want a message mentioning completion", errOut.String())
+	}
+}
+
+// --- run: --help advertises completion + --shell (P1.M2.T1.S1) ---
+
+// `--help` stdout must contain the completion USAGE row and the --shell option.
+func TestRunHelpShowsCompletionRow(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := run([]string{"--help"}, &out, &errOut)
+	if code != 0 {
+		t.Fatalf("run(--help): code=%d; want 0", code)
+	}
+	got := out.String()
+	for _, want := range []string{"skilldozer completion", "--shell"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("run(--help) stdout missing %q:\n%s", want, got)
 		}

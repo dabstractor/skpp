@@ -61,6 +61,7 @@ USAGE:
   skilldozer --search <query>
   skilldozer check
   skilldozer init [<dir>]
+  skilldozer completion [--shell <name>]
   skilldozer --path
   skilldozer --help
   skilldozer --version
@@ -75,6 +76,7 @@ EXAMPLES:
   skilldozer --search reddit         # substring search over tag/name/description/keywords/aliases/category
   skilldozer check                   # validate every skill on disk
   skilldozer init --store <dir>     # non-interactive first-run setup
+  eval "$(skilldozer completion)"     # load completions into your shell
 
 OPTIONS:
   <tag> [<tag>...]   Resolve tags to skill directory paths (one absolute path per line)
@@ -84,6 +86,8 @@ OPTIONS:
   check              Validate every skill on disk (report OK / WARN / ERROR)
   init [<dir>]      First-run setup: pick/create the skills store and write the config
   --store <dir>     Non-interactive store path for init
+  completion [--shell <name>]   Emit the shell completion script for eval (§14.6)
+  --shell <bash|zsh|fish>      Force a shell for completion (else auto-detect)
   --path, -p         Print the resolved skills directory (discovery rule printed to stderr)
   --file, -f         Print the SKILL.md path instead of the directory (modifier)
   --relative         Print paths relative to the skills directory (modifier)
@@ -141,6 +145,8 @@ type config struct {
 	init              bool     // `skilldozer init [<dir>]` first-run setup (PRD §8.2); also set by `--store <dir>` (which implies init)
 	initStore         string   // non-interactive store path: `init <dir>` positional or `--store <dir>` / `--store=<dir>`; empty ⇒ auto-detect (P1.M2.T2.S3)
 	storeMissingValue bool     // --store / --store= seen with NO value (Issue 2); run() rejects with exit 2 before init dispatch (config NOT written) in P1.M1.T2.S2. NOT set by bare `init` (c.initStore=="" ⇒ prompt).
+	completion        bool     // `skilldozer completion` subcommand (PRD §14.6); exclusive like check/init; also set by `--shell <name>` (which implies completion)
+	completionShell   string   // `--shell <bash|zsh|fish>` value (PRD §14.6); "" ⇒ detect from $SKILLDOZER_SHELL/$SHELL (P1.M2.T2.S2)
 	tags              []string // positional <tag> args (PRD §6.1 `skilldozer <tag> [<tag>...]`); resolved in run
 	unknownFlag       string   // first unknown dashed token, "" if none (§6 header → exit 2)
 }
@@ -201,6 +207,12 @@ func parseArgs(args []string) config {
 				if val == "" {
 					c.storeMissingValue = true
 				}
+			case "--shell":
+				// `--shell=<name>`: force a shell for completion (PRD §14.6). Mirrors --store's '='-form;
+				// implies completion mode (c.completion=true). No short form. NO empty-value guard (PRD §6.4
+				// specifies no missing-value exit code for --shell — `--shell=` is completion=true, shell="").
+				c.completion = true
+				c.completionShell = val
 			default:
 				if c.unknownFlag == "" {
 					c.unknownFlag = a
@@ -261,6 +273,12 @@ func parseArgs(args []string) config {
 			// nested skill `writing/check` still resolves: this case matches only
 			// the EXACT token "check".
 			c.check = true
+		case "completion":
+			// `skilldozer completion [--shell <name>]` (PRD §14.6). `completion` is a RESERVED positional
+			// token (like `check`): it selects completion mode and is NOT captured as a tag. Captured
+			// ANYWHERE in argv; run()'s exclusivity rejects completion+tags / completion+mode with exit 2.
+			// A nested skill `writing/completion` still resolves: this case matches only the EXACT token.
+			c.completion = true
 		case "--store":
 			// `--store <dir>`: non-interactive store path for init (PRD §8.2). Mirrors
 			// --search's next-token capture; implies init mode (c.init=true) when a
@@ -275,6 +293,16 @@ func parseArgs(args []string) config {
 			} else {
 				c.storeMissingValue = true
 			}
+		case "--shell":
+			// `--shell <name>`: force a shell for completion (PRD §14.6). Mirrors --store's next-token
+			// capture; implies completion mode (c.completion=true) when a value follows. No short form.
+			// If --shell is the LAST token (no value), completion stays false — mirrors --search's
+			// no-value silent behavior (PRD §6.4 specifies no missing-value exit code for --shell).
+			if i+1 < len(args) {
+				c.completion = true
+				c.completionShell = args[i+1]
+				i++
+			}
 		case "init":
 			// `skilldozer init [<dir>]` first-run setup (PRD §8.2). `init` is a RESERVED
 			// positional token (like `check`): it selects init mode and is NOT
@@ -284,8 +312,9 @@ func parseArgs(args []string) config {
 			// flag (`init --store …`) or subcommand (`init check`) is left for its
 			// own case so exclusivity can flag the conflict. A DUPLICATE `init`
 			// (`init init`) is captured into c.tags below so the init+tags exclusivity
-			// branch rejects it with exit 2 (Issue 4) — consistent with `init check`.
-			// GOTCHA: a store literally named `check`/`init` must be passed via `--store`.
+			// branch rejects it with exit 2 (Issue 4) — consistent with `init check` /
+			// `init completion`. GOTCHA: a store literally named `check`/`init`/`completion`
+			// must be passed via `--store`.
 			c.init = true
 			if i+1 < len(args) {
 				next := args[i+1]
@@ -297,11 +326,11 @@ func parseArgs(args []string) config {
 					// "init" must still be passed via --store.
 					c.tags = append(c.tags, next)
 					i++
-				} else if !strings.HasPrefix(next, "-") && next != "check" {
+				} else if !strings.HasPrefix(next, "-") && next != "check" && next != "completion" {
 					c.initStore = next
 					i++
 				}
-				// else: a dashed flag (`init --store …`) or `init check` → left for its own case.
+				// else: a dashed flag (`init --store …`), `init check`, or `init completion` → left for its own case.
 			}
 		default:
 			// Positional <tag> (PRD §6.1 `skilldozer <tag> [<tag>...]`): a token that
@@ -757,6 +786,17 @@ func exclusivityError(c config) (bad bool, msg string) {
 		}
 		if c.check || c.list || c.searchMode || c.all || c.path {
 			return true, "skilldozer: 'init' cannot be combined with --list/--search/--all/--path/check"
+		}
+	}
+	// completion is its own exclusive mode (PRD §6.3 / §14.6: like check/init). It rejects the other
+	// modes/subcommands AND stray tags. `completion` does no positional capture (mirrors check), so
+	// any positional after it lands in c.tags and is rejected here as a stray.
+	if c.completion {
+		if hasTags {
+			return true, "skilldozer: 'completion' cannot be combined with tag arguments"
+		}
+		if c.check || c.init || c.list || c.searchMode || c.all || c.path {
+			return true, "skilldozer: 'completion' cannot be combined with check/init/--path/--list/--search/--all"
 		}
 	}
 	return false, ""
