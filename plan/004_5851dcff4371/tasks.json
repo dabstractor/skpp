@@ -1,0 +1,156 @@
+{
+  "backlog": [
+    {
+      "type": "Phase",
+      "id": "P1",
+      "title": "Subcommands → flags + skills-first completions",
+      "status": "Researching",
+      "description": "Convert the three bare-word reserved subcommands (check, init, completion) into long-only --flags (--check, --init, --completions) so the bare positional namespace belongs entirely to skill tags (decision 19), then rewrite the three shell completion files to be skills-first and long-form-only (decision 20). The existing internal/ subsystems (discover, resolve, check, config, search, ui, skillsdir) are untouched except for one error-message string.",
+      "milestones": [
+        {
+          "type": "Milestone",
+          "id": "P1.M1",
+          "title": "CLI contract conversion (check/init/completion → --check/--init/--completions)",
+          "status": "Planned",
+          "description": "The behavioral core. After M1, bare words are tags and the three actions are flags. All existing subsystems keep working; only the parsing/dispatch/error-message layer and tests change. M1.T1 is code; M1.T2 is usage/error strings; M1.T3 is tests.",
+          "tasks": [
+            {
+              "type": "Task",
+              "id": "P1.M1.T1",
+              "title": "parseArgs flag conversion + exclusivityError rewrite",
+              "status": "Planned",
+              "description": "Convert the parseArgs bare-subcommand cases to --flag cases, update config struct doc comments, and rewrite all exclusivityError messages. After T1, bare words fall through to tag capture and --check/--init/--completions select their modes. The dispatch logic in run() is unchanged — only how config fields get SET changes.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T1.S1",
+                  "title": "parseArgs: delete bare cases, add --check/--init/--completions flag cases",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": [],
+                  "prd_selectors": ["h2.5", "h3.1", "h3.3", "h2.16", "h2.18"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/004_5851dcff4371/architecture/code_change_map.md Change Group 1 for exact line numbers. The parseArgs function is at main.go:179-369. Three bare-word cases exist at lines 284 (check), 294 (completion), 324 (init). The `=`-form switch is at lines 196-234. The default tag-capture branch is at lines 353-368.\n2. INPUT: The existing main.go file with working bare-word subcommand parsing. All tests currently pass (green baseline). The `=`-form switch already handles --store= and --shell= (which imply init/completion respectively).\n3. LOGIC:\n   a) DELETE the `case \"check\":` block (main.go:284-293), `case \"completion\":` block (main.go:294-299), and the ENTIRE `case \"init\":` block (main.go:324-351) including all Issue-4 duplicate-init logic and next != \"check\"/next != \"completion\" special-casing.\n   b) ADD to the main switch a { } block three new cases:\n      - `case \"--check\":` → `c.check = true`\n      - `case \"--completions\":` → `c.completion = true` (NOTE: PLURAL, per decision 19 — the old subcommand was singular `completion`, the new flag is `--completions`)\n      - `case \"--init\":` → `c.init = true`, then if i+1 < len(args) and args[i+1] does NOT start with \"-\", capture args[i+1] as c.initStore and i++ (mirrors the old `init <dir>` positional capture, now `--init <dir>`). A dashed following token (--init --store ...) is left for its own case.\n   c) ADD to the `=`-form switch (lines 196-234) after the `--store=` case: `case \"--init\":` → `c.init = true; c.initStore = val; if val == \"\" { c.storeMissingValue = true }` (mirrors --store=).\n   d) The default: branch (lines 353-368) NEEDS NO CHANGE — bare words check/init/completions now automatically land in c.tags.\n   e) --store still implies init; --shell still implies completion — DO NOT change this wiring (lines 218-233, 300-323).\n   f) Update config struct doc comments (main.go:162-167): replace \"subcommand\" with \"flag\" in the check/init/completion/initStore/completionShell field comments. Replace bare `skilldozer check` with `skilldozer --check`, `skilldozer init` with `skilldozer --init`, `skilldozer completion` with `skilldozer --completions`.\n   g) Update package doc comment (main.go:10) — replace \"subcommands like `check`\" with \"flags like `--check`\".\n   h) Remove/rewrite ALL code comments containing \"reserved\" or \"subcommand\" (~16 sites in non-test .go files — see code_change_map.md Change Group 6d). Replace with \"flag\" language.\n4. OUTPUT: A main.go where parseArgs accepts --check/--init/--completions as flags and bare check/init/completions fall through to c.tags. go build ./... must succeed. go vet ./... must pass. Tests will FAIL until P1.M1.T3 — that is expected (TDD).\n5. DOCS: [Mode A] Update main.go doc comments on config struct fields and parseArgs cases to reference --check/--init/--completions flags instead of \"subcommand\". These ARE the developer-facing documentation for the CLI contract."
+                },
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T1.S2",
+                  "title": "exclusivityError: rewrite messages to --flags + mode-set consistency",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": ["P1.M1.T1.S1"],
+                  "prd_selectors": ["h2.5", "h3.1", "h3.4", "h2.16"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/004_5851dcff4371/architecture/code_change_map.md Change Group 3. The exclusivityError function is at main.go:782-835. The bool-driven gating LOGIC is unchanged (c.check/c.init/c.completion still gate the same families); only message strings and one mode-set literal change.\n2. INPUT: main.go from P1.M1.T1.S1 (parseArgs already accepts flags). The exclusivityError function currently has messages referencing bare words: 'check' (lines 804, 807), 'init' (lines 815, 818), 'completion' (lines 825, 829).\n3. LOGIC:\n   a) Rewrite ALL six error messages: 'check' → '--check', 'init' → '--init', 'completion' → '--completions'. Example: line 804 \"'check' cannot be combined with tag arguments\" → \"'--check' cannot be combined with tag arguments\".\n   b) Mode-set consistency: ADD c.completion to the init-block mode set at line 818 (currently `{c.check, c.list, c.searchMode, c.all, c.path}` — missing c.completion). The completion-block at line 829 backstops it today, but the delta requests consistency. Also add c.completion to the check-block mode set at line 807 if absent.\n   c) Update the init-block message (line 818) to list --completions in the exclusion set: \"'--init' cannot be combined with --check/--completions/--list/--search/--all/--path\".\n   d) Update the exclusivityError function doc comment (if it mentions \"modes/subcommands\") to use \"flags\" language.\n4. OUTPUT: exclusivityError produces messages with --check/--init/--completions and all mode pairs are consistently caught. go build ./... must succeed.\n5. DOCS: [Mode A] The error messages ARE the user-facing documentation for the exit-code contract (§6.4). No separate doc update needed."
+                }
+              ]
+            },
+            {
+              "type": "Task",
+              "id": "P1.M1.T2",
+              "title": "usageText rewrite + error string updates + function doc comments",
+              "status": "Planned",
+              "description": "Rewrite the usageText constant (the --help / no-args surface) to show --check/--init/--completions flags, update all error prefix strings that reference bare 'init', and update function doc comments that reference the bare 'completion' subcommand.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T2.S1",
+                  "title": "Rewrite usageText + update all error prefix strings + doc comments",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": ["P1.M1.T1.S1"],
+                  "prd_selectors": ["h2.5", "h3.1", "h3.4", "h2.7", "h3.8", "h3.9", "h3.10", "h2.16"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/004_5851dcff4371/architecture/code_change_map.md Change Groups 4-6 for exact line numbers.\n2. INPUT: main.go from P1.M1.T1.S1 (parseArgs and exclusivityError already converted to flags).\n3. LOGIC:\n   a) usageText constant (main.go:71-117): Rewrite the USAGE block (lines 80-82): `skilldozer check` → `skilldozer --check`, `skilldozer init [<dir>]` → `skilldozer --init [<dir>]`, `skilldozer completion [--shell <name>]` → `skilldozer --completions [--shell <name>]`. Rewrite EXAMPLES (lines 95-97): `skilldozer check` → `skilldozer --check`, `skilldozer init --store <dir>` → `skilldozer --init --store <dir>`, `eval \"$(skilldozer completion)\"` → `eval \"$(skilldozer --completions)\"`. Rewrite OPTIONS (lines 104-108): bare `check` → `--check`, bare `init [<dir>]` → `--init [<dir>]`, bare `completion [--shell <name>]` → `--completions [--shell <name>]`. Add a note after USAGE or before OPTIONS: \"Help and completions advertise long forms only; short aliases (-a, -l, -s, -f, -p, -h, -v) remain valid for typing but are not advertised (§6.1).\"\n   b) skillsdir.ErrNotFound (internal/skillsdir/skillsdir.go:275): Change message from `\"skilldozer is not configured; run \\`skilldozer init\\`\"` to `\"skilldozer is not configured; run \\`skilldozer --init\\`\"`. This is the ONLY change to any internal/ file.\n   c) runInit/setupStore error prefixes (8 sites in main.go): ALL occurrences of `\"skilldozer init: \"` → `\"skilldozer --init: \"`. Exact lines: 1001, 1005, 1027, 1090, 1095, 1100, 1103, 1110.\n   d) Comment-only references (3 sites): lines 1086, 1150, 1162 — update `\"skilldozer init: ...\"` references to `\"skilldozer --init: ...\"`.\n   e) Function doc comments: completionScript (main.go:1112-1120), detectShell (main.go:1234-1243), runCompletion (main.go:1257-1271) — update all references from `skilldozer completion` to `skilldozer --completions` and from `eval \"$(skilldozer completion)\"` to `eval \"$(skilldozer --completions)\"`. NOTE: function NAMES stay as-is (completionScript, detectShell, runCompletion) — only doc comments change.\n   f) runCheck doc comment (main.go:631): update from `skilldozer check` to `skilldozer --check`.\n4. OUTPUT: A main.go where usageText shows only --flag forms, all error strings reference --init/--check/--completions, and all doc comments use flag language. go build ./... must succeed.\n5. DOCS: [Mode A] The usageText constant IS the user-facing --help surface. The error prefix strings ARE the user-facing error messages. These updates ride WITH the work — no separate docs subtask."
+                }
+              ]
+            },
+            {
+              "type": "Task",
+              "id": "P1.M1.T3",
+              "title": "Update main_test.go to the --flag contract",
+              "status": "Planned",
+              "description": "Flip every test that passes a bare check/init/completion token expecting a mode to instead pass --check/--init/--completions. Update all error-message assertions to reference --flags. Add new tests for namespace safety (bare words now land in c.tags). After T3, go test ./... is fully green.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T3.S1",
+                  "title": "Flip parseArgs-level + exclusivity-level tests to --flag contract",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": ["P1.M1.T1.S1", "P1.M1.T1.S2", "P1.M1.T2.S1"],
+                  "prd_selectors": ["h2.5", "h3.1", "h3.4", "h2.12", "h2.18"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/004_5851dcff4371/architecture/test_doc_change_map.md for the complete list of test functions with exact line numbers. ~15 parseArgs-level and ~19 exclusivity-level functions need flipping. The test helper pattern uses standalone one-function-per-case style (not table-driven) for parseArgs capture tests.\n2. INPUT: The main.go from P1.M1.T1 + P1.M1.T2 where parseArgs accepts --check/--init/--completions and bare words fall through to c.tags. exclusivityError produces --flag messages.\n3. LOGIC:\n   a) Flip ~15 parseArgs-level test functions (lines 1224-1457): every test passing bare `\"check\"`/`\"init\"`/`\"completion\"` tokens must pass `\"--check\"`/`\"--init\"`/`\"--completions\"` instead. See test_doc_change_map.md for the exact mapping. Examples: TestParseArgsCheckSubcommand (1224) → pass `\"--check\"`, assert c.check==true. TestParseArgsInitSubcommand (1262) → pass `\"--init\"`. TestParseArgsCompletionSubcommand (1389) → pass `\"--completions\"`. TestParseArgsInitPositionalDir (1279) → pass `\"--init\", \"/tmp/x\"`.\n   b) RENAME test functions from \"Subcommand\" to \"Flag\" (e.g., TestParseArgsCheckSubcommand → TestParseArgsCheckFlag, TestParseArgsInitSubcommand → TestParseArgsInitFlag, TestParseArgsCompletionSubcommand → TestParseArgsCompletionsFlag).\n   c) Flip ~19 exclusivity test functions (lines 1795-2115): every test passing bare tokens must pass flags. Update ALL error message assertions: 'check' → '--check', 'init' → '--init', 'completion' → '--completions'. See test_doc_change_map.md for the exact mapping per function.\n   d) Handle TestRunExclusivityInitInit (2006): old test passes `\"init\", \"init\"` expecting exit 2 (init+tags conflict via Issue-4 logic). NEW: pass `\"--init\", \"--init\"` → the second `--init` is a duplicate flag, not a tag. The behavior depends on how parseArgs handles duplicate --init: likely c.init is set twice (idempotent), no tags captured, no exclusivity error → falls through to init dispatch. ALTERNATIVELY, the old init+tags conflict is now `--init sometag` (a bare tag after --init flag). Rewrite this test to `\"--init\", \"sometag\"` → c.init=true, c.tags=[\"sometag\"] → exclusivity catches init+tags → exit 2.\n   e) Add NEW namespace-safety tests: TestParseArgsBareCheckNowTag — bare `\"check\"` → c.check==false, c.tags==[\"check\"]. TestParseArgsBareInitNowTag — bare `\"init\"` → c.init==false, c.tags==[\"init\"]. TestParseArgsBareCompletionsNowTag — bare `\"completions\"` → c.completion==false, c.tags==[\"completions\"]. TestParseArgsInitFlagWithDir — `\"--init\", \"/tmp/x\"` → c.init==true, c.initStore==\"/tmp/x\", len(c.tags)==0. TestParseArgsInitEqualsDir — `\"--init=/tmp/x\"` → c.init==true, c.initStore==\"/tmp/x\".\n4. OUTPUT: go test ./... passes with all parseArgs-level and exclusivity-level tests flipped to the --flag contract. New namespace-safety tests are green.\n5. DOCS: none — no user-facing/config/API surface change (test-only)."
+                },
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T3.S2",
+                  "title": "Flip run-level dispatch + completion tests + help-text assertions",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": ["P1.M1.T3.S1"],
+                  "prd_selectors": ["h2.5", "h3.1", "h3.4", "h2.8", "h2.12", "h2.13", "h2.18"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/004_5851dcff4371/architecture/test_doc_change_map.md for the complete list. ~11 run-level dispatch functions + ~6 completion functions + 2 help-text functions + 1 unconfigured test need flipping.\n2. INPUT: The main.go from P1.M1.T1-T2 with --flag parsing. The main_test.go from P1.M1.T3.S1 with parseArgs/exclusivity tests already flipped.\n3. LOGIC:\n   a) Flip ~11 run-level dispatch test functions (TestRunCheck* lines 1474-1637, TestRunInit* lines 2760-2820): every test calling run() with bare `\"check\"`/`\"init\"` tokens must pass `\"--check\"`/`\"--init\"` instead. The assertions (exit codes, stdout/stderr content) remain the same — only the input arg changes.\n   b) Flip ~6 completion dispatch tests (TestRunCompletion* lines 2953-3037): every test passing `\"completion\"` must pass `\"--completions\"`. Examples: TestRunCompletionBashScript (2953) → run([]string{\"--completions\", \"--shell\", \"bash\"}, ...). TestRunCompletionUnsupportedShell (2986) → run([]string{\"--completions\", \"--shell\", \"tcsh\"}, ...).\n   c) Update help-text tests: TestRunHelpShowsInitRow (2029) — assert stdout contains `--init` (not bare `init`). TestRunHelpShowsCompletionRow (2116) — assert stdout contains `--completions` (not bare `completion`).\n   d) Update TestRunBareTagUnconfiguredNeverPrompts (2867): assert stderr contains `run \\`skilldozer --init\\`` (not bare `init`).\n   e) Verify TestEmbeddedCompletionsMatchOnDisk (2929) still passes — it reads on-disk completion files and compares to embedded vars. It will still pass (the files haven't changed yet — that's M2.T1).\n   f) Run the FULL test suite: go test ./... must be 100% green. No existing green test may regress.\n4. OUTPUT: go test ./... is fully green. All bare-subcommand references in tests are eliminated. Namespace-safety is verified.\n5. DOCS: none — no user-facing/config/API surface change (test-only)."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "Milestone",
+          "id": "P1.M2",
+          "title": "User-facing surfaces: completions rewrite + README sync",
+          "status": "Planned",
+          "description": "Rewrite the three shell completion files to be skills-first and long-form-only (decision 20), then sync README.md to reflect the new --flag CLI contract. M2 depends on M1 via the §14.4 lockstep invariant (completion files are frozen to parseArgs).",
+          "tasks": [
+            {
+              "type": "Task",
+              "id": "P1.M2.T1",
+              "title": "Rewrite the three completion files (skills-first + long-form-only)",
+              "status": "Planned",
+              "description": "Rewrite completions/skilldozer.bash, completions/_skilldozer (zsh), and completions/skilldozer.fish to: (a) remove bare subcommand offers so a bare <tab> yields skills only, (b) remove short-form flag offers (-v -h -p -l -a -f -s) so flags are long-form-only, (c) add --check/--init/--completions to each file's flag set, (d) keep tag completion (the skilldozer --relative --all 2>/dev/null probe) byte-identical. A rebuild is required for --completions to emit the new bytes (§14.6 lockstep).",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M2.T1.S1",
+                  "title": "Rewrite completions/skilldozer.bash (skills-first, long-form-only)",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": ["P1.M1.T1.S1"],
+                  "prd_selectors": ["h2.13", "h3.14", "h3.15", "h3.16", "h3.17", "h3.19", "h2.16"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/004_5851dcff4371/architecture/completions_change_map.md §1 for exact line numbers. The bash completion is 69 lines. Key areas: flag list in compgen -W at line 41, value-routing at lines 33-36, walk-guard at lines 46-55, tag probe at line 61, subcommand offers at line 63.\n2. INPUT: The main.go from P1.M1.T1 where parseArgs accepts --check/--init/--completions as flags and bare words are tags. The §14.4 lockstep invariant requires the bash flag set to match parseArgs exactly.\n3. LOGIC:\n   a) Flag list (line 41, compgen -W): Remove ALL 7 short forms (-v -h -p -l -a -f -s). Keep long forms (--version --help --path --list --all --file --relative --no-color --search --store). ADD three new flags: --check --init --completions. Final word list: \"--version --help --path --list --all --file --relative --no-color --search --store --check --init --completions\".\n   b) Value-routing (line 34): Remove -s from --search routing: `--search|-s)` → `--search)`. Add --init to directory routing: `--store)` → `--store|--init) COMPREPLY=($(compgen -d -- \"$cur\")); return 0`.\n   c) Walk-guard (lines 46-55): Remove the `check`/`init`/`completion` bare-word suppression from line 52. Simplify the have_pos tracking — without subcommand exclusivity, positionals are always skills and skills are never mutually exclusive with each other (you can pass multiple tags to skilldozer <tag> [<tag>...]).\n   d) Subcommand offers (line 63): DELETE `cands=\"$cands check init completion\"`. Line becomes just `cands=\"$tags\"` (or the line is removed and the variable flows directly).\n   e) Tag probe (line 61): KEEP BYTE-IDENTICAL: `tags=$(skilldozer --relative --all 2>/dev/null)`.\n   f) LOCKSTEP comment (lines 11-13): Update to cite decisions 19/20 and the long-form-only rule: \"Flags are long-form-only (decision 20); short aliases stay valid at runtime but are not advertised. Updated for --check/--init/--completions (decision 19).\"\n4. OUTPUT: A bash completion file where bare <tab> shows skills only, skilldozer -<tab> shows long-form flags only (including --check/--init/--completions), and tag completion is byte-identical. The §13 delta assertions must pass after go build.\n5. DOCS: [Mode A] This file IS the user-facing tab-completion surface. The LOCKSTEP comment IS the developer-facing maintenance doc."
+                },
+                {
+                  "type": "Subtask",
+                  "id": "P1.M2.T1.S2",
+                  "title": "Rewrite completions/_skilldozer (zsh) + completions/skilldozer.fish",
+                  "status": "Planned",
+                  "story_points": 2,
+                  "dependencies": ["P1.M1.T1.S1", "P1.M2.T1.S1"],
+                  "prd_selectors": ["h2.13", "h3.14", "h3.15", "h3.16", "h3.17", "h3.19", "h2.16"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/004_5851dcff4371/architecture/completions_change_map.md §2 (zsh, 61 lines) and §3 (fish, 52 lines) for exact line numbers.\n2. INPUT: The main.go from P1.M1.T1 (flag contract). The bash completion from P1.M2.T1.S1 (use as the reference pattern for the flag list and LOCKSTEP comment).\n3. LOGIC — ZSH (completions/_skilldozer):\n   a) Flag array (lines 21-39): Remove ALL short-form entries. Lines 22-27 currently have pairs like `'--version[...]' '-v[...]'` — delete the `-v`/`-h`/`-p`/`-l`/`-a`/`-f` right-hand entries, keeping only the `--long` left-hand entries. Delete line 34 (the `-s[...]` standalone entry for search), keeping line 33 (`'--search[...]:query:'`).\n   b) Add three new long flags to the array (before the closing `)` at ~line 38): `'--check[Validate every skill on disk]'`, `'--init[First-run setup: pick/create the skills store]:directory:_files'`, `'--completions[Emit the shell completion script for eval]'`.\n   c) State handling (lines 43-58): REMOVE the `check init completion` from `compadd` at line 46 → `compadd -- \"$tags[@]\"`. Simplify the first/rest split — without subcommand exclusivity, all positionals are skills: replace the case block with a simple `'*: :->args'` state that always `compadd -- \"$tags[@]\"`. Remove the exclusivity guard at line 52.\n   d) Tag probe (line 19): KEEP BYTE-IDENTICAL.\n   e) LOCKSTEP comment (lines 12-14): Update to match bash's updated comment.\n4. LOGIC — FISH (completions/skilldozer.fish):\n   a) Flag matrix (lines 17-22): Remove ALL `-s` short opts. Lines 17-22 have `-s v -l version` etc. — remove the `-s X` tokens, keeping only `-l longform`. Line 32: remove `-s s` from search, keeping `-l search`.\n   b) Add three new flags after line 24: `complete -c skilldozer -l check -d 'Validate every skill on disk'`, `complete -c skilldozer -l init -d 'First-run setup: pick/create the skills store' -r`, `complete -c skilldozer -l completions -d 'Emit the shell completion script for eval'`.\n   c) Add --init to directory routing: after line 39 (`complete -c skilldozer -l store ... -r`), the --init flag should also trigger directory completion. Fish handles this automatically via `-r` on the --init flag definition.\n   d) DELETE bare subcommand offers (lines 43-45): Remove all three `__fish_is_first_arg -a 'check'/'init'/'completion'` directives.\n   e) Tag directive guard (lines 51-52): Re-author ONLY the `-n` condition — remove `__fish_seen_subcommand_from check init completion` (no subcommands to guard against) and remove `-s` from `--search -s` reference. The `-a '(skilldozer --relative --all 2>/dev/null)'` probe MUST stay byte-identical. New guard: `complete -c skilldozer -n 'not __fish_prev_arg_in --search' \\`.\n   f) LOCKSTEP comment: Update to match bash's updated comment.\n5. OUTPUT: zsh and fish completion files where bare <tab> shows skills only and flags are long-form-only (including --check/--init/--completions). Tag probes byte-identical.\n6. DOCS: [Mode A] These files ARE the user-facing tab-completion surfaces. LOCKSTEP comments ARE the developer-facing maintenance docs."
+                }
+              ]
+            },
+            {
+              "type": "Task",
+              "id": "P1.M2.T2",
+              "title": "Sync changeset-level documentation",
+              "status": "Planned",
+              "description": "Mode B changeset-level documentation: update README.md to reflect the new --flag CLI contract. This task depends on ALL implementing subtasks (it summarizes the entire changeset). Update every command reference, remove the now-obsolete 'Reserved tag names' section, and document the skills-first completions behavior.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M2.T2.S1",
+                  "title": "Update README.md: command refs, remove Reserved section, completions section",
+                  "status": "Planned",
+                  "story_points": 1,
+                  "dependencies": ["P1.M1.T1.S1", "P1.M1.T1.S2", "P1.M1.T2.S1", "P1.M1.T3.S1", "P1.M1.T3.S2", "P1.M2.T1.S1", "P1.M2.T1.S2"],
+                  "prd_selectors": ["h2.14", "h2.13", "h3.14", "h3.19", "h2.5", "h3.1", "h2.16", "h2.18"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/004_5851dcff4371/architecture/test_doc_change_map.md §README for exact line numbers. README.md is 345 lines. The 'Reserved tag names' paragraph is at lines 239-247. ~16 lines reference bare subcommands.\n2. INPUT: The completed codebase from M1 (all tests green, --flag contract active) and M2.T1 (completion files rewritten). This is a documentation-only subtask — no code changes.\n3. LOGIC:\n   a) Update ALL bare subcommand references (~16 lines): `skilldozer init` → `skilldozer --init`, `skilldozer check` → `skilldozer --check`, `skilldozer completion` → `skilldozer --completions`. Exact lines: 43, 63, 66, 76, 77, 89, 107, 113, 117, 183, 240, 281, 297, 315, 330. Also scan for any `eval \"$(skilldozer completion)\"` → `eval \"$(skilldozer --completions)\"` and `skilldozer completion --shell fish | source` → `skilldozer --completions --shell fish | source`.\n   b) DELETE the 'Reserved tag names' paragraph (lines 239-247) entirely — it is now factually wrong. There are NO reserved names. Replace with a one-line note if useful: \"Bare words are always skill tags; actions are --flags (§6.1). A skill named check/init/completions resolves normally.\"\n   c) Update the Completions section (lines 94-150): The eval/source one-liners are now `eval \"$(skilldozer --completions)\"` (bash/zsh) and `skilldozer --completions --shell fish | source` (fish). Describe the skills-first + long-form-only behavior: a bare <tab> lists your skills; skilldozer -<tab> lists the long-form flags (--all, --check, --completions, --file, --help, --init, --list, --no-color, --path, --relative, --search, --store, --version), narrowed by what you type. Note that --init/--check/--completions are flags (decision 19) and short forms are valid but not advertised (decision 20).\n   d) Verify README section ordering matches PRD §15 outline: Title+one-liner, Why, Install, Usage, Where skills live, Adding a skill, How skilldozer finds the store, Shell completions, Constraints.\n   e) Verify with grep assertions: `grep -q 'skilldozer --completions' README.md` (new commands present), `! grep -q 'Reserved tag names' README.md` (old section removed), `! grep -Eq 'skilldozer (init|check|completion)\\b' README.md` (no bare subcommands remain, word-boundary safe against --init/--check/--completions).\n4. OUTPUT: A README.md that accurately documents the --flag CLI contract with no stale bare-subcommand references. All grep assertions pass.\n5. DOCS: This IS the Mode B changeset-level documentation task. It depends on all implementing subtasks and runs last."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
