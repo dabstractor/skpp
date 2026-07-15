@@ -4,7 +4,7 @@
       "type": "Phase",
       "id": "P1",
       "title": "Bugfix Round 2 — Completion, Discovery Safety, and CLI Consistency",
-      "status": "Researching",
+      "status": "Complete",
       "description": "Fix two Major issues (--shell completion value routing; vanished configured store silently falling through) and three Minor issues (inconsistent missing-value exit codes for --search/--shell; POSIX -- separator rejected; README version doc inaccuracy). All five issues are explicitly specified in the PRD and validated against the current codebase. The changes touch completion files, internal/skillsdir, main.go parseArgs/run, and README.md.",
       "milestones": [
         {
@@ -174,21 +174,21 @@
           "type": "Milestone",
           "id": "P1.M3",
           "title": "Changeset-Level Documentation Sync",
-          "status": "Researching",
+          "status": "Complete",
           "description": "Cross-cutting documentation sweep to ensure the README, help text, and completion file headers are consistent after all five issues are fixed. This is the Mode B catch-all that prevents a coherent delta from shipping with a stale overview.",
           "tasks": [
             {
               "type": "Task",
               "id": "P1.M3.T1",
               "title": "Sync changeset-level documentation",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Verify README.md, usageText in main.go, and completion file headers are consistent with all changes from this bugfix round. Check that --shell is documented everywhere it should be, the error contract section reflects the new exit-2 behavior for --search/--shell, and the POSIX -- convention is mentioned if appropriate.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M3.T1.S1",
                   "title": "Sweep README, help text, and completion headers for changeset consistency",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1",

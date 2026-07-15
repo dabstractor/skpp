@@ -43,4 +43,4 @@ h1.0 PRD — Skilldozer
  h2.17 18. Suggested build order (for the one-shot pass)
  h2.18 19. Decisions log (assumptions made in lieu of asking — override if you disagree)
 ---
-code:12 para:48 list:22 table:7 quote:9
+code:12 para:48 list:22 table:7 quote:10

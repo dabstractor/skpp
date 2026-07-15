@@ -146,8 +146,9 @@ multiple tags are given, any unresolved tag causes nothing to be printed and
 exit 1, so `pi` never sees a partial result. The `--path`, `--list`, `--search`,
 and `--all` modes are mutually exclusive — combining any two exits 2, as does
 combining a tag with any of them (a tag resolves one path; those modes inspect
-the whole store). `--store` expects a value: `--init --store` with nothing after
-it exits 2 rather than guessing a store.
+the whole store). The flags that take a value — `--store`, `--search`, and
+`--shell` — all exit 2 when given as the last token with nothing after them,
+rather than guessing a value.
 
 `skilldozer --help` lists every flag.
 
@@ -243,7 +244,9 @@ OK    example (example)
    ```
 
    A missing or unreadable config is treated as "not yet configured" and falls
-   through to the rules below — never a hard error.
+   through to the rules below — never a hard error. A config whose `store:` points
+   at a directory that no longer exists is different: skilldozer names the missing
+   path and exits 1 rather than silently falling through to a different store.
 3. **Sibling of the running binary** (symlink-aware: `os.Executable()` plus
    `EvalSymlinks()`) — still lets a clone-and-build dev workflow work with no
    config. This is the rule a `./install.sh` symlink install relies on; a copy
@@ -292,11 +295,13 @@ Once loaded, completions are **skills-first and long-form-only**:
   completable immediately.
 - `skilldozer -<tab>` lists the **long-form flags only** — `--all`, `--check`,
   `--completions`, `--file`, `--help`, `--init`, `--list`, `--no-color`,
-  `--path`, `--relative`, `--search`, `--store`, `--version` — narrowed by what
-  you type after the dash. Short aliases (`-a`, `-l`, …) stay valid for typing
-  but are deliberately not advertised.
+  `--path`, `--relative`, `--search`, `--shell`, `--store`, `--version` — narrowed
+  by what you type after the dash. Short aliases (`-a`, `-l`, …) stay valid for
+  typing but are deliberately not advertised.
 - `skilldozer --init <tab>` and `skilldozer --store <tab>` offer directories
-  (the store to adopt); `skilldozer --search <tab>` offers nothing (free-text).
+  (the store to adopt); `skilldozer --search <tab>` offers nothing (free-text);
+  `skilldozer --shell <tab>` offers the three supported shells — `bash`, `zsh`,
+  and `fish`.
 
 This works because every action that is not a skill tag is a `--flag` —
 `--check`, `--init`, and `--completions` are flags, not bare subcommands — so the

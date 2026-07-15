@@ -233,6 +233,119 @@
           ]
         }
       ]
+    },
+    {
+      "type": "Phase",
+      "id": "P2",
+      "title": "Symlink-aware discovery + derived zsh completions emit (PRD §7.1 / §14.6 mid-session integration)",
+      "status": "Complete",
+      "description": "Two PRD edits landed mid-session AFTER the P1 baseline (subcommands → flags). Both are ALREADY satisfied by shipped code and `go test ./...` is green, so this phase FORMALIZES them in the breakdown rather than scheduling re-work. P1 is preserved untouched — neither change touches the parsing/dispatch/completion-FILE layer P1 owned, so no 'UPDATE REQUIRED' note is added to any P1 task. (1) §7.1 now requires the discovery walk to FOLLOW symlinked directories: a skill reachable only through a symlink is discovered and reported under its on-disk link name (not the resolved target), and cycles are broken via a visited set of resolved (canonical) paths. Shipped in internal/discover/index.go (Index). (2) §14.6 now requires the `--completions` emit path to DERIVE an eval-safe zsh wrapper from the embedded autoload file (bash/fish stay verbatim); completionScript returns verbatim bytes locked by TestEmbeddedCompletionsMatchOnDisk. Shipped in main.go (zshEvalScript + runCompletion). NOTE: the code predates/parallels the formal PRD edit — the PRD caught up to the implementation, not the reverse; tasks are marked Complete to reflect verified reality and avoid an implementer redoing finished work ('without losing progress').",
+      "milestones": [
+        {
+          "type": "Milestone",
+          "id": "P2.M1",
+          "title": "Symlink-aware discovery walk (§7.1)",
+          "status": "Complete",
+          "description": "discover.Index must follow symlinked directories so a skill reachable only via a symlink is discovered and reported under its on-disk link name (not the resolved EvalSymlinks target), and must terminate when a link points back at an ancestor (cycle). Shipped in internal/discover/index.go; locked by the index_test.go symlink suite. No change to the frontmatter parser (discover.go), Skill extraction (skill.go), or any consumer — only the walk; --all/--relative --all, --list, resolve, --search, and --check all inherit symlink support automatically through []Skill.",
+          "tasks": [
+            {
+              "type": "Task",
+              "id": "P2.M1.T1",
+              "title": "Implement symlink-following + cycle-guarded Index walk",
+              "status": "Complete",
+              "description": "Rewrite the recursive scan so linked directories are entered (filepath.WalkDir skips them by default), RelTag/Dir are reported through the link name, and a canonical-path visited set stops cycles. Keep the manifest-free contract (rebuilt from disk each call) and the per-entry error-skip policy.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P2.M1.T1.S1",
+                  "title": "Index: symlink-following walk with dual-path tracking + canonical-path cycle guard",
+                  "status": "Complete",
+                  "story_points": 3,
+                  "dependencies": [],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: The walk lives in internal/discover/index.go Index(skillsDir). It threads TWO path coordinate systems: displayPath (the path AS IT APPEARS under skillsDir, symlinks preserved — backs RelTag and Skill.Dir) and realPath (the EvalSymlinks canonical target — what is read, and the cycle-detection key). The visited set is map[string]bool keyed by canonical real path, seeded with realRoot. Unlike filepath.WalkDir (which skips linked dirs by default), this walk resolves every entry with EvalSymlinks and recurses.\n2. INPUT: §7.1 step 2 (updated PRD): 'Symlinked directories ARE followed — a skill reachable only through a symlink is discovered and reported under its on-disk link name (not the resolved target). Cycles are broken via a visited set of resolved (canonical) paths, so a link that points back at an ancestor terminates the walk instead of looping forever.'\n3. LOGIC (as shipped):\n   a) os.Stat (not Lstat) on root so a skills dir that is itself a symlink-to-dir is accepted.\n   b) For each entry with ModeSymlink set, filepath.EvalSymlinks resolves childReal to the canonical target; broken/unresolvable links are skipped (Stat/EvalSymlinks error → continue), and isDir is taken from the resolved Stat.\n   c) A directory directly containing SKILL.md (plain OR a link to a dir) is a skill; its RelTag is filepath.Rel(root, displayPath) with filepath.ToSlash — the on-disk LINK NAME, not the resolved target. This is the §7.1 'reported under its on-disk link name' requirement.\n   d) Cycle guard: before recursing into a dir, check visited[childReal] (canonical real path); if present skip, else mark and recurse. EvalSymlinks canonicalizes, so a link back at an ancestor resolves to a string already in the set → terminates instead of looping forever.\n   e) Per-entry errors (unreadable subtree) are skipped; malformed-YAML SKILL.md still yields a HasFM=false Skill (lenient; check re-parses SourceFile). Manifest-free contract unchanged (rebuilt from disk each call).\n4. OUTPUT: discover.Index follows symlinks, reports skills under link names, and terminates on cycles. No consumer changes required — all modes inherit symlink support through []Skill.\n5. DOCS: [Mode A] The Index doc comment in internal/discover/index.go documents the dual-path model and cycle guard — it is the developer-facing reference for §7.1.",
+                  "prd_selectors": [
+                    "h2.7",
+                    "h3.5",
+                    "h2.9",
+                    "h2.13",
+                    "h2.16"
+                  ]
+                },
+                {
+                  "type": "Subtask",
+                  "id": "P2.M1.T1.S2",
+                  "title": "Tests: symlink discovery, nested-tree link, cycle termination, broken link, symlinked root",
+                  "status": "Complete",
+                  "story_points": 2,
+                  "dependencies": [
+                    "P2.M1.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: internal/discover/index_test.go has a symlink suite gated by mustSymlink (t.Skip when the platform/filesystem can't create links): TestIndexFollowsSymlinkedSkillDir, TestIndexSymlinkedNestedTree, TestIndexSymlinkCycleBroken (5s deadline), TestIndexBrokenSymlinkSkipped, TestIndexSymlinkedRoot.\n2. INPUT: The shipped Index from P2.M1.T1.S1.\n3. LOGIC (as shipped, all PASSING — verified by `go test ./internal/discover`):\n   a) TestIndexFollowsSymlinkedSkillDir: a skill dir OUTSIDE the root, linked in by name, is discovered; Skill.Dir is the display path THROUGH the symlink (the link name, not the resolved target); SourceFile is readable through the link; frontmatter is parsed.\n   b) TestIndexSymlinkedNestedTree: a symlink to a multi-skill tree is discovered with all nested skills, tags under the link name.\n   c) TestIndexSymlinkCycleBroken: two cycles planted (link→root, link→sub-ancestor); the 5s-deadline Index call returns instead of looping forever.\n   d) TestIndexBrokenSymlinkSkipped: a dangling symlink is skipped silently (nil error, not a skill).\n   e) TestIndexSymlinkedRoot: a skills dir that is ITSELF a symlink-to-dir works; tags reported under the link root.\n4. OUTPUT: go test ./internal/discover passes on a symlink-capable platform (and skips cleanly elsewhere). §7.1 symlink contract is locked.\n5. DOCS: none (test-only).",
+                  "prd_selectors": [
+                    "h2.7",
+                    "h3.5",
+                    "h2.13",
+                    "h2.16"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "Milestone",
+          "id": "P2.M2",
+          "title": "Derived (eval-safe) zsh completions emit (§14.6)",
+          "status": "Complete",
+          "description": "The `--completions` emit path must return the embedded bytes VERBATIM for bash and fish, but DERIVE an eval-safe zsh wrapper from the embedded autoload file: strip the trailing `_skilldozer \"$@\"` self-call and append an explicit `compdef _skilldozer skilldozer` plus a guarded `compinit` bootstrap. completionScript stays verbatim (byte-identity lock via TestEmbeddedCompletionsMatchOnDisk); the derivation lives in runCompletion/zshEvalScript. The §14.5 manual fpath path keeps using the verbatim on-disk autoload file (it is correct as an autoload — the self-call is the standard idiom that fires once compsys loads). Shipped in main.go; locked by main_test.go.",
+          "tasks": [
+            {
+              "type": "Task",
+              "id": "P2.M2.T1",
+              "title": "zshEvalScript derivation + runCompletion branch + verbatim lock",
+              "status": "Complete",
+              "description": "Add the eval-safe derivation for zsh while keeping bash/fish verbatim and keeping completionScript's return value byte-identical to the on-disk autoload file. Depends on P1.M2.T1.S2 — the on-disk completions/_skilldozer autoload file this derives from; its trailing `_skilldozer \"$@\"` self-call is the strip target (already present in P1.M2.T1.S2's shipped file, so no re-work is needed there).",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P2.M2.T1.S1",
+                  "title": "zshEvalScript + zshEvalRegistration; completionScript verbatim; runCompletion derives zsh only",
+                  "status": "Complete",
+                  "story_points": 2,
+                  "dependencies": [
+                    "P1.M2.T1.S2"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: main.go has completionScript(shell) (returns the //go:embed vars bashCompletion/zshCompletion/fishCompletion verbatim, with a true/false by-shell bool), zshEvalScript(raw string) string, the const zshEvalRegistration, and runCompletion (the `skilldozer --completions` handler). runCompletion derives ONLY for zsh: `script, ok := completionScript(shell); ...; if shell == \"zsh\" { script = zshEvalScript(script) }`; bash and fish are emitted verbatim.\n2. INPUT: §14.6 'Embedding (self-sufficient binary)' plus the NEW 'bash/fish vs zsh emit path' blockquote: under `eval \"$(skilldozer --completions)\"` the `#compdef skilldozer` header is an inert comment and the trailing `_skilldozer \"$@\"` self-call runs the function immediately, hitting `_arguments` before compsys is guaranteed loaded (`_skilldozer:31: command not found: _arguments`). The §14.5 manual fpath path (copy onto fpath + compinit) keeps using the verbatim autoload file; only the `--completions` eval path uses the derived wrapper.\n3. LOGIC (as shipped):\n   a) zshEvalScript strips the trailing `_skilldozer \"$@\"` self-call via strings.LastIndex (robust to trailing-comment drift; the function body never references its own name, so the single match is the self-call), then TrimRight collapses blank lines so the body ends cleanly at the closing brace.\n   b) Appends zshEvalRegistration: `autoload -Uz compinit`, `(( $+functions[compdef] )) || compinit`, `(( $+functions[compdef] )) && compdef _skilldozer skilldozer` — a guarded bootstrap that is a no-op once compsys is already loaded (oh-my-zsh / prezto / a manual `autoload -U compinit && compinit` all define compdef).\n   c) completionScript is UNCHANGED: it returns the embedded bytes verbatim for all three shells. The derivation lives in runCompletion only, preserving the §14.6 byte-identity lock (on-disk file == embedded var == completionScript output).\n   d) Bash and fish emit paths are byte-identical to the §14.5 manual source/copy path.\n4. OUTPUT: `eval \"$(skilldozer --completions)\"` in ~/.zshrc no longer triggers `_skilldozer:31: command not found: _arguments`; bash/fish behavior unchanged.\n5. DOCS: [Mode A] The completionScript, zshEvalScript, and zshEvalRegistration doc comments in main.go document the verbatim-vs-derived split — they are the developer-facing reference for §14.6. Function NAMES (completionScript/detectShell/runCompletion) are unchanged (internal; renaming was out of scope in P1 and stays so).\n6. NOTE: This formalizes already-shipped code; the on-disk autoload file from P1.M2.T1.S2 already ends with the self-call the derivation strips (verified by TestZshEvalScriptStripsSelfCall passing against the real embedded file).",
+                  "prd_selectors": [
+                    "h2.14",
+                    "h3.19",
+                    "h3.18",
+                    "h2.13",
+                    "h2.16"
+                  ]
+                },
+                {
+                  "type": "Subtask",
+                  "id": "P2.M2.T1.S2",
+                  "title": "Tests: verbatim lock, self-call strip, compdef registration, runCompletion zsh eval-safety",
+                  "status": "Complete",
+                  "story_points": 1,
+                  "dependencies": [
+                    "P2.M2.T1.S1"
+                  ],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: main_test.go has TestEmbeddedCompletionsMatchOnDisk (reads on-disk completions/* and asserts byte-equality with the embedded vars — the §14.6 byte-identity lock), TestZshEvalScriptStripsSelfCall, TestZshEvalScriptRegistersCompdef, TestRunCompletionZshIsEvalSafe, plus the existing TestRunCompletionBashScript / FishScript / UnsupportedShell / UndetectableShell / EnvShellDetected / LoginShellDetected (§6.4 exit-code paths, unchanged by this work).\n2. INPUT: The shipped zshEvalScript/runCompletion from P2.M2.T1.S1.\n3. LOGIC (as shipped, all PASSING — verified by `go test ./...`):\n   a) TestEmbeddedCompletionsMatchOnDisk: completionScript's source (the embedded vars) is byte-identical to the on-disk completions/* files — locks the 'single source of truth' invariant even with the zsh derivation in place (the derivation is applied AFTER completionScript returns verbatim).\n   b) TestZshEvalScriptStripsSelfCall: the eval output does NOT contain the `_skilldozer \"$@\"` self-call (the _arguments bug source).\n   c) TestZshEvalScriptRegistersCompdef: the eval output contains `compdef _skilldozer skilldozer` and keeps the `#compdef skilldozer` header and the `_arguments` call in the function body.\n   d) TestRunCompletionZshIsEvalSafe: end-to-end — runCompletion for zsh emits a script containing `compdef _skilldozer skilldozer`.\n4. OUTPUT: go test ./... is green; the §14.6 derived-zsh contract is locked without regressing bash/fish or the §6.4 exit-code matrix.\n5. DOCS: none (test-only).",
+                  "prd_selectors": [
+                    "h2.14",
+                    "h3.19",
+                    "h2.13",
+                    "h2.16"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
   ]
 }
