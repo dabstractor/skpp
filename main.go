@@ -755,14 +755,14 @@ func run(args []string, stdout, stderr io.Writer) int {
 //     surprising)
 //   - tags + an inspection mode (--path/--list/--search/--all) — PRD §6.3 (Issue 3:
 //     --path was omitted, silently dropping a stray tag; now uniform with the
-//     check+mode and mode+mode sets)
-//   - check + tags — `check` ignores tags, so the combo is meaningless
-//   - check + a listing mode — modes are mutually exclusive
+//     --check+mode and mode+mode sets)
+//   - --check + tags — `--check` ignores tags, so the combo is meaningless
+//   - --check + a listing mode — modes are mutually exclusive
 //
-// `check` is NOT in the listing-mode set: check+mode is caught by the families
-// below (and check+path, too — it used to silently resolve by dispatch order
-// with path winning, which was inconsistent with check+list/check+search/
-// check+all all exiting 2; N1 closed that asymmetry). Issue 3 (P1.M2.T1.S1)
+// `--check` is NOT in the listing-mode set: --check+mode is caught by the families
+// below (and --check+path, too — it used to silently resolve by dispatch order
+// with path winning, which was inconsistent with --check+list/--check+search/
+// --check+all all exiting 2; N1 closed that asymmetry). Issue 3 (P1.M2.T1.S1)
 // closed the identical asymmetry for tags+--path. --file/--relative/
 // --no-color are MODIFIERS and never trigger exclusivity (they combine with a
 // single mode, e.g. `--all --file`).
@@ -786,33 +786,33 @@ func exclusivityError(c config) (bad bool, msg string) {
 		return true, "skilldozer: tags cannot be combined with --path/--list/--search/--all"
 	}
 	if c.check && hasTags {
-		return true, "skilldozer: 'check' cannot be combined with tag arguments"
+		return true, "skilldozer: '--check' cannot be combined with tag arguments"
 	}
-	if c.check && (c.path || c.list || c.searchMode || c.all) {
-		return true, "skilldozer: 'check' cannot be combined with --path/--list/--search/--all"
+	if c.check && (c.completion || c.path || c.list || c.searchMode || c.all) {
+		return true, "skilldozer: '--check' cannot be combined with --completions/--path/--list/--search/--all"
 	}
-	// init is its own exclusive mode (PRD §6.3 / §8.2: like `check`). It rejects the
-	// listing/inspection modes AND stray tags. A single positional <dir> after `init`
+	// --init is its own exclusive mode (PRD §6.3 / §8.2: like `--check`). It rejects the
+	// listing/inspection modes AND stray tags. A single positional <dir> after `--init`
 	// is consumed as the store (c.initStore) by parseArgs, so it never reaches
-	// c.tags; a SECOND positional, or any positional after `init --store`, lands in
+	// c.tags; a SECOND positional, or any positional after `--init --store`, lands in
 	// c.tags and is rejected here as a stray.
 	if c.init {
 		if hasTags {
-			return true, "skilldozer: 'init' cannot be combined with tag arguments"
+			return true, "skilldozer: '--init' cannot be combined with tag arguments"
 		}
-		if c.check || c.list || c.searchMode || c.all || c.path {
-			return true, "skilldozer: 'init' cannot be combined with --list/--search/--all/--path/check"
+		if c.check || c.completion || c.list || c.searchMode || c.all || c.path {
+			return true, "skilldozer: '--init' cannot be combined with --check/--completions/--list/--search/--all/--path"
 		}
 	}
-	// completion is its own exclusive mode (PRD §6.3 / §14.6: like check/init). It rejects the other
-	// modes/subcommands AND stray tags. `completion` does no positional capture (mirrors check), so
+	// --completions is its own exclusive mode (PRD §6.3 / §14.6: like --check/--init). It rejects the other
+	// mode flags AND stray tags. `--completions` does no positional capture (mirrors --check), so
 	// any positional after it lands in c.tags and is rejected here as a stray.
 	if c.completion {
 		if hasTags {
-			return true, "skilldozer: 'completion' cannot be combined with tag arguments"
+			return true, "skilldozer: '--completions' cannot be combined with tag arguments"
 		}
 		if c.check || c.init || c.list || c.searchMode || c.all || c.path {
-			return true, "skilldozer: 'completion' cannot be combined with check/init/--path/--list/--search/--all"
+			return true, "skilldozer: '--completions' cannot be combined with --check/--init/--path/--list/--search/--all"
 		}
 	}
 	return false, ""

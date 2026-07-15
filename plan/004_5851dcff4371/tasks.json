@@ -18,7 +18,7 @@
               "type": "Task",
               "id": "P1.M1.T1",
               "title": "parseArgs flag conversion + exclusivityError rewrite",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Convert the parseArgs bare-subcommand cases to --flag cases, update config struct doc comments, and rewrite all exclusivityError messages. After T1, bare words fall through to tag capture and --check/--init/--completions select their modes. The dispatch logic in run() is unchanged — only how config fields get SET changes.",
               "subtasks": [
                 {
@@ -41,7 +41,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T1.S2",
                   "title": "exclusivityError: rewrite messages to --flags + mode-set consistency",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1"
@@ -60,14 +60,14 @@
               "type": "Task",
               "id": "P1.M1.T2",
               "title": "usageText rewrite + error string updates + function doc comments",
-              "status": "Planned",
+              "status": "Researching",
               "description": "Rewrite the usageText constant (the --help / no-args surface) to show --check/--init/--completions flags, update all error prefix strings that reference bare 'init', and update function doc comments that reference the bare 'completion' subcommand.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M1.T2.S1",
                   "title": "Rewrite usageText + update all error prefix strings + doc comments",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T1.S1"
