@@ -7,7 +7,7 @@
 // modifiers (M3.T8.S2). Every other §6 flag is added by later milestones (M4
 // --search/check, M5 --help + exit codes). The arg parser is intentionally a
 // small hand-rolled switch (not Go's `flag` package) so the full §6 matrix —
-// subcommands like `check`, positional <tag> args, long+short aliases, and
+// flags like `--check`, positional <tag> args, long+short aliases, and
 // §6.3 mutual exclusivity — can be expressed cleanly. See
 // plan/001_fcde63e5bb60/P1M1T3.S1/research/verified_facts.md §5.
 package main
@@ -159,11 +159,11 @@ type config struct {
 	noColor           bool     // --no-color     : disable ANSI color even on a TTY (§6.2)
 	searchMode        bool     // --search <q>/-s : substring search over tag/name/description/keywords/aliases/category (§10)
 	searchQ           string   // the --search query value (consumed from the token after --search/-s)
-	check             bool     // `skilldozer check` subcommand: validate every skill in the store (§9)
-	init              bool     // `skilldozer init [<dir>]` first-run setup (PRD §8.2); also set by `--store <dir>` (which implies init)
-	initStore         string   // non-interactive store path: `init <dir>` positional or `--store <dir>` / `--store=<dir>`; empty ⇒ auto-detect (P1.M2.T2.S3)
+	check             bool     // `skilldozer --check` flag: validate every skill in the store (§9)
+	init              bool     // `skilldozer --init [<dir>]` flag, first-run setup (PRD §8.2); also set by `--store <dir>` (which implies init)
+	initStore         string   // non-interactive store path: `--init <dir>` flag or `--store <dir>` / `--store=<dir>`; empty ⇒ auto-detect (P1.M2.T2.S3)
 	storeMissingValue bool     // --store / --store= seen with NO value (Issue 2); run() rejects with exit 2 before init dispatch (config NOT written) in P1.M1.T2.S2. NOT set by bare `init` (c.initStore=="" ⇒ prompt).
-	completion        bool     // `skilldozer completion` subcommand (PRD §14.6); exclusive like check/init; also set by `--shell <name>` (which implies completion)
+	completion        bool     // `skilldozer --completions` flag (PRD §14.6); exclusive like check/init; also set by `--shell <name>` (which implies completion)
 	completionShell   string   // `--shell <bash|zsh|fish>` value (PRD §14.6); "" ⇒ detect from $SKILLDOZER_SHELL/$SHELL (P1.M2.T2.S2)
 	tags              []string // positional <tag> args (PRD §6.1 `skilldozer <tag> [<tag>...]`); resolved in run
 	unknownFlag       string   // first unknown dashed token, "" if none (§6 header → exit 2)
@@ -225,6 +225,18 @@ func parseArgs(args []string) config {
 				if val == "" {
 					c.storeMissingValue = true
 				}
+			case "--init":
+				// `--init=<dir>`: non-interactive store path (mirrors --store=). Empty value (--init=)
+				// records storeMissingValue so run() rejects with exit 2 (Issue 2).
+				c.init = true
+				c.initStore = val
+				if val == "" {
+					c.storeMissingValue = true
+				}
+			case "--check":
+				c.check = true
+			case "--completions":
+				c.completion = true
 			case "--shell":
 				// `--shell=<name>`: force a shell for completion (PRD §14.6). Mirrors --store's '='-form;
 				// implies completion mode (c.completion=true). No short form. NO empty-value guard (PRD §6.4
@@ -281,21 +293,12 @@ func parseArgs(args []string) config {
 				c.searchQ = args[i+1]
 				i++
 			}
-		case "check":
-			// `skilldozer check` subcommand (PRD §9). `check` is a RESERVED positional
-			// token: it selects validation mode and is NOT captured as a tag. A
-			// skill literally tagged `check` cannot be resolved via `skilldozer check`
-			// (subcommand names are reserved, as in any CLI). Captured ANYWHERE in
-			// argv (so `--no-color check` still selects check); run()'s
-			// exclusivity check rejects check+tags / check+mode with exit 2. A
-			// nested skill `writing/check` still resolves: this case matches only
-			// the EXACT token "check".
+		case "--check":
+			// `skilldozer --check` flag (PRD §9). A bare `check` is a skill TAG (decision 19).
 			c.check = true
-		case "completion":
-			// `skilldozer completion [--shell <name>]` (PRD §14.6). `completion` is a RESERVED positional
-			// token (like `check`): it selects completion mode and is NOT captured as a tag. Captured
-			// ANYWHERE in argv; run()'s exclusivity rejects completion+tags / completion+mode with exit 2.
-			// A nested skill `writing/completion` still resolves: this case matches only the EXACT token.
+		case "--completions":
+			// `skilldozer --completions [--shell <name>]` flag (PRD §14.6). PLURAL (decision 19).
+			// A bare `completion`/`completions` is a skill tag, not this flag.
 			c.completion = true
 		case "--store":
 			// `--store <dir>`: non-interactive store path for init (PRD §8.2). Mirrors
@@ -321,34 +324,18 @@ func parseArgs(args []string) config {
 				c.completionShell = args[i+1]
 				i++
 			}
-		case "init":
-			// `skilldozer init [<dir>]` first-run setup (PRD §8.2). `init` is a RESERVED
-			// positional token (like `check`): it selects init mode and is NOT
-			// captured as a tag. If the NEXT token is a positional <dir> (not a
-			// dashed flag AND not a reserved subcommand check/init), capture it into
-			// c.initStore and skip it (i++) — the `init <dir>` form. A following
-			// flag (`init --store …`) or subcommand (`init check`) is left for its
-			// own case so exclusivity can flag the conflict. A DUPLICATE `init`
-			// (`init init`) is captured into c.tags below so the init+tags exclusivity
-			// branch rejects it with exit 2 (Issue 4) — consistent with `init check` /
-			// `init completion`. GOTCHA: a store literally named `check`/`init`/`completion`
-			// must be passed via `--store`.
+		case "--init":
+			// `skilldozer --init [<dir>]` first-run setup (PRD §8.2). --init is the sole mode
+			// accepting a positional <dir> (the store to adopt, §6.3): a following NON-dashed
+			// token is c.initStore. A dashed follower (--init --store …) is left for its own
+			// case. A bare `init` is a skill tag (decision 19).
 			c.init = true
 			if i+1 < len(args) {
 				next := args[i+1]
-				if next == "init" {
-					// Issue 4: a duplicate reserved `init` token is a conflict, not a store
-					// dir. Capture it as a tag so exclusivityError's init+tags branch rejects
-					// `init init` with exit 2 (consistent with `init check`, where the second
-					// token reaches case "check" and sets c.check). A literal store dir named
-					// "init" must still be passed via --store.
-					c.tags = append(c.tags, next)
-					i++
-				} else if !strings.HasPrefix(next, "-") && next != "check" && next != "completion" {
+				if !strings.HasPrefix(next, "-") {
 					c.initStore = next
 					i++
 				}
-				// else: a dashed flag (`init --store …`), `init check`, or `init completion` → left for its own case.
 			}
 		default:
 			// Positional <tag> (PRD §6.1 `skilldozer <tag> [<tag>...]`): a token that
