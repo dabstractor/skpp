@@ -152,24 +152,26 @@ func main() {
 // (P1.M5.T11.S1) completes the matrix by adding help and unknownFlag, the final
 // two fields needed for the §6.3 precedence + the §6-header unknown-flag rule.
 type config struct {
-	version           bool     // --version / -v : print "skilldozer <version>" and exit 0
-	help              bool     // --help / -h    : print usage to STDOUT and exit 0 (§6.1, §6.3 "help wins" tiebreak)
-	path              bool     // --path / -p    : print resolved skills dir and exit 0/1
-	list              bool     // --list / -l    : print the human-readable catalog table (§6.1)
-	all               bool     // --all / -a     : print every skill's directory path, one per line (§6.1)
-	file              bool     // --file / -f    : print the SKILL.md path instead of the dir path (§6.2)
-	relative          bool     // --relative     : print paths relative to the skills dir, not absolute (§6.2)
-	noColor           bool     // --no-color     : disable ANSI color even on a TTY (§6.2)
-	searchMode        bool     // --search <q>/-s : substring search over tag/name/description/keywords/aliases/category (§10)
-	searchQ           string   // the --search query value (consumed from the token after --search/-s)
-	check             bool     // `skilldozer --check` flag: validate every skill in the store (§9)
-	init              bool     // `skilldozer --init [<dir>]` flag, first-run setup (PRD §8.2); also set by `--store <dir>` (which implies init)
-	initStore         string   // non-interactive store path: `--init <dir>` flag or `--store <dir>` / `--store=<dir>`; empty ⇒ auto-detect (P1.M2.T2.S3)
-	storeMissingValue bool     // --store / --store= seen with NO value (Issue 2); run() rejects with exit 2 before init dispatch (config NOT written) in P1.M1.T2.S2. NOT set by bare `init` (c.initStore=="" ⇒ prompt).
-	completion        bool     // `skilldozer --completions` flag (PRD §14.6); exclusive like check/init; also set by `--shell <name>` (which implies completion)
-	completionShell   string   // `--shell <bash|zsh|fish>` value (PRD §14.6); "" ⇒ detect from $SKILLDOZER_SHELL/$SHELL (P1.M2.T2.S2)
-	tags              []string // positional <tag> args (PRD §6.1 `skilldozer <tag> [<tag>...]`); resolved in run
-	unknownFlag       string   // first unknown dashed token, "" if none (§6 header → exit 2)
+	version            bool     // --version / -v : print "skilldozer <version>" and exit 0
+	help               bool     // --help / -h    : print usage to STDOUT and exit 0 (§6.1, §6.3 "help wins" tiebreak)
+	path               bool     // --path / -p    : print resolved skills dir and exit 0/1
+	list               bool     // --list / -l    : print the human-readable catalog table (§6.1)
+	all                bool     // --all / -a     : print every skill's directory path, one per line (§6.1)
+	file               bool     // --file / -f    : print the SKILL.md path instead of the dir path (§6.2)
+	relative           bool     // --relative     : print paths relative to the skills dir, not absolute (§6.2)
+	noColor            bool     // --no-color     : disable ANSI color even on a TTY (§6.2)
+	searchMode         bool     // --search <q>/-s : substring search over tag/name/description/keywords/aliases/category (§10)
+	searchQ            string   // the --search query value (consumed from the token after --search/-s)
+	check              bool     // `skilldozer --check` flag: validate every skill in the store (§9)
+	init               bool     // `skilldozer --init [<dir>]` flag, first-run setup (PRD §8.2); also set by `--store <dir>` (which implies init)
+	initStore          string   // non-interactive store path: `--init <dir>` flag or `--store <dir>` / `--store=<dir>`; empty ⇒ auto-detect (P1.M2.T2.S3)
+	storeMissingValue  bool     // --store / --store= seen with NO value (Issue 2); run() rejects with exit 2 before init dispatch (config NOT written) in P1.M1.T2.S2. NOT set by bare `init` (c.initStore=="" ⇒ prompt).
+	searchMissingValue bool     // --search/-s seen with NO following value (Issue 3); run() exits 2 with "--search requires a query" before dispatch. NOT set by --search= (D5: empty =-form value is a valid empty query).
+	shellMissingValue  bool     // --shell seen with NO following value (Issue 3); run() exits 2 with "--shell requires a value (bash|zsh|fish)". NOT set by --shell= (D5).
+	completion         bool     // `skilldozer --completions` flag (PRD §14.6); exclusive like check/init; also set by `--shell <name>` (which implies completion)
+	completionShell    string   // `--shell <bash|zsh|fish>` value (PRD §14.6); "" ⇒ detect from $SKILLDOZER_SHELL/$SHELL (P1.M2.T2.S2)
+	tags               []string // positional <tag> args (PRD §6.1 `skilldozer <tag> [<tag>...]`); resolved in run
+	unknownFlag        string   // first unknown dashed token, "" if none (§6 header → exit 2)
 }
 
 // parseArgs scans argv tokens and fills a config. Flags may appear in any order
@@ -289,12 +291,15 @@ func parseArgs(args []string) config {
 			// value is NOT appended to c.tags (i++ skips it), and it never reaches
 			// the default branch, so a dashed value (e.g. `--search -x` → query
 			// "-x") is NOT mistaken for an unknown flag. If --search is the LAST
-			// token (no value follows) searchMode stays false and the call falls
-			// through to the no-recognized-mode default (exit 1).
+			// token (no value follows) searchMode stays false and the call records
+			// searchMissingValue so run() exits 2 with "--search requires a query"
+			// (mirrors --store, Issue 3; decisions D4).
 			if i+1 < len(args) {
 				c.searchMode = true
 				c.searchQ = args[i+1]
 				i++
+			} else {
+				c.searchMissingValue = true
 			}
 		case "--check":
 			// `skilldozer --check` flag (PRD §9). A bare `check` is a skill TAG (decision 19).
@@ -320,12 +325,15 @@ func parseArgs(args []string) config {
 		case "--shell":
 			// `--shell <name>`: force a shell for completion (PRD §14.6). Mirrors --store's next-token
 			// capture; implies completion mode (c.completion=true) when a value follows. No short form.
-			// If --shell is the LAST token (no value), completion stays false — mirrors --search's
-			// no-value silent behavior (PRD §6.4 specifies no missing-value exit code for --shell).
+			// If --shell is the LAST token (no value), records shellMissingValue so run() exits 2
+			// with "--shell requires a value (bash|zsh|fish)" (mirrors --store/--search, Issue 3;
+			// decisions D4). completion stays false (no value consumed).
 			if i+1 < len(args) {
 				c.completion = true
 				c.completionShell = args[i+1]
 				i++
+			} else {
+				c.shellMissingValue = true
 			}
 		case "--init":
 			// `skilldozer --init [<dir>]` first-run setup (PRD §8.2). --init is the sole mode
@@ -440,8 +448,10 @@ func expandShortBundle(c *config, a string, args []string, i int) (consumeNext, 
 			c.searchQ = args[i+1] // value is the next argv token ("-ls foo")
 			return true, true     // caller advances i
 		default:
-			// 's' seen but no value anywhere: mirror the bare "-s"-no-value rule
-			// (searchMode stays false). The bool flags before it remain set.
+			// 's' seen but no value anywhere: mirror the bare "-s"-no-value rule (now
+			// records searchMissingValue so run() exits 2 with "--search requires a query",
+			// Issue 3). The bool flags before it remain set.
+			c.searchMissingValue = true
 		}
 	}
 	return false, true
@@ -496,8 +506,19 @@ func run(args []string, stdout, stderr io.Writer) int {
 	//      `store:` value is preserved (Issue 2). stdout stays EMPTY (§6.4 discipline).
 	//      The signal is set by parseArgs in BOTH --store no-value branches (P1.M1.T2.S1);
 	//      it is NOT set by bare `init` (c.initStore=="" legitimately means "prompt").
+	//      The same missing-value-exit-2 pattern is applied to --search (searchMissingValue)
+	//      and --shell (shellMissingValue) for symmetry across all value-taking flags
+	//      (Issue 3, D4).
 	if c.storeMissingValue {
 		fmt.Fprintln(stderr, "skilldozer: --store requires a value")
+		return 2
+	}
+	if c.searchMissingValue {
+		fmt.Fprintln(stderr, "skilldozer: --search requires a query")
+		return 2
+	}
+	if c.shellMissingValue {
+		fmt.Fprintln(stderr, "skilldozer: --shell requires a value (bash|zsh|fish)")
 		return 2
 	}
 

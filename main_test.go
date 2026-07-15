@@ -365,6 +365,57 @@ func TestRunStoreBareNoValueExits2(t *testing.T) {
 	}
 }
 
+// Issue 3 (P1.M2.T1.S1): `--search` (no value) -> exit 2, empty stdout, exact stderr
+// (mirrors --store). Previously fell through to implicit help (stdout usage, exit 0).
+func TestRunSearchNoValueExits2(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := run([]string{"--search"}, &out, &errOut)
+	if code != 2 {
+		t.Fatalf("run(--search): code=%d; want 2 (missing --search value, Issue 3)", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout=%q; want EMPTY (§6.4: nothing on stdout on exit-2)", out.String())
+	}
+	want := "skilldozer: --search requires a query\n"
+	if got := errOut.String(); got != want {
+		t.Errorf("stderr=%q; want %q", got, want)
+	}
+}
+
+// Issue 3: bare `-s` (no value) -> exit 2 (same path as --search via the main
+// switch; bare -s has len==2 so it does NOT enter expandShortBundle).
+func TestRunSearchShortNoValueExits2(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := run([]string{"-s"}, &out, &errOut)
+	if code != 2 {
+		t.Fatalf("run(-s): code=%d; want 2 (missing -s value, Issue 3)", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout=%q; want EMPTY", out.String())
+	}
+	want := "skilldozer: --search requires a query\n"
+	if got := errOut.String(); got != want {
+		t.Errorf("stderr=%q; want %q", got, want)
+	}
+}
+
+// Issue 3: `--shell` (no value) -> exit 2, empty stdout, exact stderr (mirrors
+// --store/--search). completion stays false (no value consumed).
+func TestRunShellNoValueExits2(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := run([]string{"--shell"}, &out, &errOut)
+	if code != 2 {
+		t.Fatalf("run(--shell): code=%d; want 2 (missing --shell value, Issue 3)", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout=%q; want EMPTY", out.String())
+	}
+	want := "skilldozer: --shell requires a value (bash|zsh|fish)\n"
+	if got := errOut.String(); got != want {
+		t.Errorf("stderr=%q; want %q", got, want)
+	}
+}
+
 // Issue 2 (P1.M1.T2.S2): the non-destructive contract. A pre-existing config.yaml
 // with a valid `store:` must survive `init --store` (no value) byte-for-byte — the
 // guard returns before runInit/setupStore/configpkg.Save. Mirrors
@@ -999,12 +1050,28 @@ func TestParseArgsSearchShort(t *testing.T) {
 	}
 }
 
-// --search with NO following value (last token) -> searchMode stays false; falls
-// to the default exit-1 path. Proper exit-2 "needs an argument" is P1.M5.T11.
-func TestParseArgsSearchNoValueStaysInactive(t *testing.T) {
+// Issue 3: `--search` (last token, no value) records searchMissingValue so run()
+// exits 2 with "--search requires a query" (mirrors --store, D4). searchMode stays
+// false (no value consumed).
+func TestParseArgsSearchMissingValue(t *testing.T) {
 	c := parseArgs([]string{"--search"})
+	if !c.searchMissingValue {
+		t.Errorf("parseArgs(--search) no value: searchMissingValue=false; want true (Issue 3)")
+	}
 	if c.searchMode {
-		t.Errorf("parseArgs(--search) with no value: searchMode=true; want false (no value consumed)")
+		t.Errorf("parseArgs(--search) no value: searchMode=true; want false (no value consumed)")
+	}
+}
+
+// Issue 3: `--shell` (no value) records shellMissingValue so run() exits 2 (mirrors
+// --search/--store). completion stays false (no value consumed).
+func TestParseArgsShellMissingValue(t *testing.T) {
+	c := parseArgs([]string{"--shell"})
+	if !c.shellMissingValue {
+		t.Errorf("parseArgs(--shell) no value: shellMissingValue=false; want true (Issue 3)")
+	}
+	if c.completion {
+		t.Errorf("parseArgs(--shell) no value: completion=true; want false (no value consumed)")
 	}
 }
 
@@ -2352,7 +2419,8 @@ func TestParseArgsShortBundleUnknownCharRejectsWhole(t *testing.T) {
 }
 
 // -vs as the LAST token (s present, no value anywhere): the bool before s is set,
-// searchMode stays false (mirrors the bare -s-no-value rule).
+// searchMode stays false, and the bundle default now records searchMissingValue
+// (Issue 3) so run() exits 2 — mirrors the bare -s-no-value rule.
 func TestParseArgsShortBundleSearchNoValue(t *testing.T) {
 	c := parseArgs([]string{"-vs"})
 	if !c.version {
@@ -2360,6 +2428,9 @@ func TestParseArgsShortBundleSearchNoValue(t *testing.T) {
 	}
 	if c.searchMode {
 		t.Errorf("-vs: searchMode=true; want false (s had no value -> stays inactive)")
+	}
+	if !c.searchMissingValue {
+		t.Errorf("-vs: searchMissingValue=false; want true (s had no value -> Issue 3 signal)")
 	}
 }
 

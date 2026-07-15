@@ -101,14 +101,14 @@
               "type": "Task",
               "id": "P1.M2.T1",
               "title": "Make missing-value handling consistent for all value-taking flags (Issue 3)",
-              "status": "Researching",
+              "status": "Complete",
               "description": "--store (no value) exits 2 with an error, but --search (no value) and --shell (no value) print help to stdout and exit 0. This asymmetry means $(skilldozer --search) captures help text. Fix: treat missing --search/--shell values as parse errors (exit 2), mirroring --store.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T1.S1",
                   "title": "Add missing-value exit-2 detection for --search and --shell in parseArgs and run",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/004_5851dcff4371/bugfix/001_ba6f35f74a59/architecture/issue_analysis.md §Issue 3, decisions.md §D4-D5, and research/parseargs_analysis.md. The config struct is at main.go:153-170. The existing pattern is: `storeMissingValue bool` field (main.go:169) set in parseArgs when --store has no value (3 places: main.go:229 for --store=, :237 for --init=, :318 for bare --store last token), then checked in run() at main.go:499-502 (`if c.storeMissingValue { fmt.Fprintln(stderr, \"skilldozer: --store requires a value\"); return 2 }`). The --search case is at main.go:288-298 (case \"--search\", \"-s\": if i+1 < len(args) { ... } else { nothing } ). The --shell case is at main.go:320-326 (case \"--shell\": if i+1 < len(args) { ... } else { nothing }). The short-bundle -s no-value case is in expandShortBundle at main.go:444 (default: comment says searchMode stays false). The misleading comment is at main.go:293 saying '(exit 1)' but actual behavior is exit 0. The run() precedence ladder is: help(471) → version(477) → unknownFlag(484) → storeMissingValue(499) → exclusivity(508). The =-form for --search (main.go:218) has NO empty-value guard (decision D5: leave as-is, only the bare no-token case gets the fix).\n2. INPUT: The config struct (main.go:153-170), parseArgs (main.go:182-358), expandShortBundle (main.go:361-450), and run() (main.go:466-504). The existing storeMissingValue pattern is the template.\n3. LOGIC: (a) Add two fields to the config struct after storeMissingValue (main.go:169): `searchMissingValue bool  // --search/-s seen with NO following value` and `shellMissingValue bool  // --shell seen with NO following value`. (b) In parseArgs main switch case \"--search\", \"-s\": (main.go:296), add `else { c.searchMissingValue = true }` to the `if i+1 < len(args)` block. (c) In parseArgs main switch case \"--shell\": (main.go:325), add `else { c.shellMissingValue = true }`. (d) In expandShortBundle (main.go:444 default case), add `c.searchMissingValue = true` before the comment. (e) In run() AFTER the storeMissingValue check (main.go:502), add: `if c.searchMissingValue { fmt.Fprintln(stderr, \"skilldozer: --search requires a query\"); return 2 }` and `if c.shellMissingValue { fmt.Fprintln(stderr, \"skilldozer: --shell requires a value (bash|zsh|fish)\"); return 2 }`. (f) Fix the misleading comment at main.go:293: change 'falls through to the no-recognized-mode default (exit 1)' to 'records searchMissingValue so run() exits 2 with --search requires a query'. Also fix the comment at main.go:324 for --shell similarly.\n4. OUTPUT: Modified main.go (config struct + 3 parseArgs branches + run() checks + comment fixes) and main_test.go (new tests). New tests: TestRunSearchNoValueExits2 (run([]string{\"--search\"}) → exit 2, stderr has 'requires a query', stdout empty), TestRunSearchShortNoValueExits2 (run([]string{\"-s\"}) → exit 2), TestRunShellNoValueExits2 (run([]string{\"--shell\"}) → exit 2, stderr has 'requires a value', stdout empty), TestParseArgsSearchMissingValue (parseArgs([]string{\"--search\"}).searchMissingValue == true), TestParseArgsShellMissingValue (parseArgs([]string{\"--shell\"}).shellMissingValue == true).\n5. DOCS: [Mode A] Fix the misleading inline comments at main.go:293 and main.go:324 to reflect the new exit-2 behavior. The --store precedent comment at main.go:493-498 should be updated to mention --search and --shell follow the same pattern. No README or external doc change needed (the error messages are self-documenting).",
@@ -124,14 +124,14 @@
               "type": "Task",
               "id": "P1.M2.T2",
               "title": "Support POSIX -- end-of-options separator (Issue 4)",
-              "status": "Planned",
+              "status": "Researching",
               "description": "A bare -- token is classified as an unknown dashed flag (exit 2). POSIX convention requires -- to mean 'all subsequent tokens are positional arguments', so a tag beginning with - can be resolved. Add a loop-level endOfOpts flag to parseArgs.",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M2.T2.S1",
                   "title": "Recognize -- as end-of-options separator in parseArgs",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M2.T1.S1"
