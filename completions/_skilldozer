@@ -16,6 +16,8 @@
 # but are not advertised. Updated for --check/--init/--completions (decision 19):
 # these were promoted from bare subcommands so the bare positional namespace
 # belongs to skill tags — a bare <tab> shows skills, never commands.
+# --shell's value completes to the bash/zsh/fish enum (§14.2); --shell is
+# advertised (D7) since it is a real, documented flag in usageText OPTIONS.
 _skilldozer() {
     local -a tags
     # Canonical relTags, one per line. ${(f)...} splits on newlines. Errors
@@ -45,6 +47,11 @@ _skilldozer() {
         '--check[Validate every skill on disk]'
         '--init[First-run setup: pick/create the skills store]:directory:_files'
         '--completions[Emit the shell completion script for eval]'
+        # `:shell:(bash zsh fish)` routes --shell's value slot to a FIXED enum —
+        # offer exactly the three supported shells, nothing else (PRD §14.2). The
+        # third value-routing pattern: --search = free-text (nothing), --store/--init
+        # = path (_files), --shell = closed enum. --shell is advertised (decision D7).
+        '--shell[Force a shell for completion]:shell:(bash zsh fish)'
     )
 
     _arguments -C "$flags[@]" '*: :->args' && return 0
