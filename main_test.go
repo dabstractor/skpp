@@ -603,6 +603,53 @@ func TestParseArgsDashedUnknownNotATag(t *testing.T) {
 	}
 }
 
+// Issue 4 (P1.M2.T2.S1): a bare "--" ends option parsing; subsequent tokens (even dashed)
+// become positional skill tags. `skilldozer -- -x` now sets tags=["-x"] (was unknownFlag="--").
+func TestParseArgsDashDashSeparator(t *testing.T) {
+	c := parseArgs([]string{"--", "-x"})
+	if len(c.tags) != 1 || c.tags[0] != "-x" {
+		t.Errorf("tags=%v; want [-x] (-x is a positional after --)", c.tags)
+	}
+	if c.unknownFlag != "" {
+		t.Errorf("unknownFlag=%q; want empty (-- is the separator, not an unknown flag)", c.unknownFlag)
+	}
+}
+
+// Issue 4: a normal tag after "--" is still a positional tag.
+func TestParseArgsDashDashBeforeTag(t *testing.T) {
+	c := parseArgs([]string{"--", "mytag"})
+	if len(c.tags) != 1 || c.tags[0] != "mytag" {
+		t.Errorf("tags=%v; want [mytag]", c.tags)
+	}
+}
+
+// Issue 4: flags BEFORE "--" still parse as flags; tokens AFTER "--" are tags. So
+// `--list -- --check` => list=true, tags=["--check"] (--check is NOT the action here).
+func TestParseArgsDashDashWithFlags(t *testing.T) {
+	c := parseArgs([]string{"--list", "--", "--check"})
+	if !c.list {
+		t.Errorf("list=false; want true (--list before -- is still a flag)")
+	}
+	if c.check {
+		t.Errorf("check=true; want false (--check is AFTER --, so it is a TAG, not the action)")
+	}
+	if len(c.tags) != 1 || c.tags[0] != "--check" {
+		t.Errorf("tags=%v; want [--check] (--check after -- is a positional tag)", c.tags)
+	}
+}
+
+// Issue 4 edge case: once end-of-options is set, a SECOND "--" is a positional tag named
+// "--" (POSIX). This locks the guard ORDER (endOfOpts check before the a=="--" check).
+func TestParseArgsDashDashSecondDashDashIsTag(t *testing.T) {
+	c := parseArgs([]string{"--", "--"})
+	if len(c.tags) != 1 || c.tags[0] != "--" {
+		t.Errorf("tags=%v; want [--] (the second -- is a positional tag once endOfOpts is set)", c.tags)
+	}
+	if c.unknownFlag != "" {
+		t.Errorf("unknownFlag=%q; want empty", c.unknownFlag)
+	}
+}
+
 // Tags and recognized flags may interleave (PRD §6: flags appear in any order).
 func TestParseArgsTagsAndFlagsInterleave(t *testing.T) {
 	c := parseArgs([]string{"--no-color", "a", "-l", "b"})
@@ -679,6 +726,32 @@ func TestRunTagAtomicityUnknownPrintsNothing(t *testing.T) {
 	}
 	if !strings.Contains(errOut.String(), "nope") {
 		t.Errorf("stderr=%q; want an error line naming 'nope'", errOut.String())
+	}
+}
+
+// Issue 4 (P1.M2.T2.S1): after "--", a dashed token reaches TAG resolution, NOT the
+// unknown-flag path. With a store (no skill named "--bogus") this is exit 1 unknown-TAG
+// (empty stdout, stderr names the tag), proving the -- separator worked. Without the fix
+// this would be exit 2 "unknown flag '--bogus'".
+func TestRunDashDashUnknownFlagStillWorks(t *testing.T) {
+	dir := sampleStore(t)
+	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
+	var out, errOut bytes.Buffer
+	code := run([]string{"--", "--bogus"}, &out, &errOut)
+	if code == 2 {
+		t.Fatalf("run(-- --bogus): code=2 (treated as unknown flag); want 1 (treated as a tag after --). stderr=%q", errOut.String())
+	}
+	if code != 1 {
+		t.Fatalf("run(-- --bogus): code=%d; want 1 (unknown tag --bogus after --)", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout=%q; want EMPTY (§6.4: nothing on stdout on failure)", out.String())
+	}
+	if !strings.Contains(errOut.String(), "--bogus") {
+		t.Errorf("stderr=%q; want an error naming the tag '--bogus'", errOut.String())
+	}
+	if strings.Contains(errOut.String(), "unknown flag") {
+		t.Errorf("stderr=%q; must NOT say 'unknown flag' (--bogus is a tag after --)", errOut.String())
 	}
 }
 

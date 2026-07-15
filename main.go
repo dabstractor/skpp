@@ -183,11 +183,30 @@ type config struct {
 // true` (or capture the next arg for value-taking flags like --search <q>).
 func parseArgs(args []string) config {
 	var c config
+	// POSIX `--` end-of-options separator (Issue 4, decisions §D6): a bare "--" token
+	// ends option parsing; every subsequent token (even dashed) is a positional skill
+	// tag. This lets a skill whose tag begins with "-" be addressed (`skilldozer -- -foo`).
+	// endOfOpts is parse-local (not a config field): it only governs the current parse.
+	endOfOpts := false
 	// Index-based loop (not range) so a value-taking flag (--search <q>) can
 	// CONSUME the following token via i++ without it also being captured as a tag.
 	// PRD §6.1/§6.2: --search/-s take exactly one value; every other flag is a bool.
 	for i := 0; i < len(args); i++ {
 		a := args[i]
+
+		// POSIX `--`: once end-of-options is set, EVERY token is a positional skill tag.
+		// This guard comes BEFORE the `--` separator guard below so a SECOND `--`
+		// (`skilldozer -- --`) becomes a positional tag named "--" (POSIX-correct).
+		if endOfOpts {
+			c.tags = append(c.tags, a)
+			continue
+		}
+		// A bare "--" token is the end-of-options separator: consume it (do NOT add to
+		// tags) and set endOfOpts so all later tokens are treated as positionals above.
+		if a == "--" {
+			endOfOpts = true
+			continue
+		}
 
 		// Issue 5 (decisions.md §D5): normalize combined / '='-bearing tokens
 		// BEFORE the exact-match switch so POSIX forms work. Each branch ends in
