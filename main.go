@@ -77,9 +77,9 @@ USAGE:
   skilldozer --all
   skilldozer --list
   skilldozer --search <query>
-  skilldozer check
-  skilldozer init [<dir>]
-  skilldozer completion [--shell <name>]
+  skilldozer --check
+  skilldozer --init [<dir>]
+  skilldozer --completions [--shell <name>]
   skilldozer --path
   skilldozer --help
   skilldozer --version
@@ -92,26 +92,29 @@ EXAMPLES:
   skilldozer --relative --all        # every skill path, relative to the skills dir
   skilldozer --list                  # human-readable catalog
   skilldozer --search reddit         # substring search over tag/name/description/keywords/aliases/category
-  skilldozer check                   # validate every skill on disk
-  skilldozer init --store <dir>     # non-interactive first-run setup
-  eval "$(skilldozer completion)"     # load completions into your shell
+  skilldozer --check                   # validate every skill on disk
+  skilldozer --init --store <dir>      # non-interactive first-run setup
+  eval "$(skilldozer --completions)"   # load completions into your shell
+
+Help and --completions advertise long forms only; short aliases (-a, -l, -s, -f, -p, -h, -v)
+remain valid for typing but are not advertised (§6.1).
 
 OPTIONS:
-  <tag> [<tag>...]   Resolve tags to skill directory paths (one absolute path per line)
-  --all, -a          Print every skill's directory path, sorted by tag
-  --list, -l         Human-readable catalog (TAG, NAME, DESCRIPTION)
-  --search <q>, -s   Substring search over tag / name / description / keywords / aliases / category
-  check              Validate every skill on disk (report OK / WARN / ERROR)
-  init [<dir>]      First-run setup: pick/create the skills store and write the config
-  --store <dir>     Non-interactive store path for init
-  completion [--shell <name>]   Emit the shell completion script for eval (§14.6)
+  <tag> [<tag>...]             Resolve tags to skill directory paths (one absolute path per line)
+  --all, -a                    Print every skill's directory path, sorted by tag
+  --list, -l                   Human-readable catalog (TAG, NAME, DESCRIPTION)
+  --search <q>, -s             Substring search over tag / name / description / keywords / aliases / category
+  --check                      Validate every skill on disk (report OK / WARN / ERROR)
+  --init [<dir>]               First-run setup: pick/create the skills store and write the config
+  --store <dir>                Non-interactive store path for init
+  --completions [--shell <name>]   Emit the shell completion script for eval (§14.6)
   --shell <bash|zsh|fish>      Force a shell for completion (else auto-detect)
-  --path, -p         Print the resolved skills directory (discovery rule printed to stderr)
-  --file, -f         Print the SKILL.md path instead of the directory (modifier)
-  --relative         Print paths relative to the skills directory (modifier)
-  --no-color         Disable ANSI color even on a TTY (modifier)
-  --help, -h         Show this help message
-  --version, -v      Print the skilldozer version
+  --path, -p                   Print the resolved skills directory (discovery rule printed to stderr)
+  --file, -f                   Print the SKILL.md path instead of the directory (modifier)
+  --relative                   Print paths relative to the skills directory (modifier)
+  --no-color                   Disable ANSI color even on a TTY (modifier)
+  --help, -h                   Show this help message
+  --version, -v                Print the skilldozer version
 
 Exit codes: 0 success/help/version | 1 unresolved/no skills/unresolvable dir | 2 unknown flag / mutually-exclusive modes
 `
@@ -615,11 +618,11 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 
-	// `skilldozer check` subcommand (PRD §9). Validates every skill in the store and
+	// `skilldozer --check` flag (PRD §9). Validates every skill in the store and
 	// prints a report: one line per problem (prefixed ERROR/WARN) plus one OK line
 	// per clean skill, ending with a "N skills, M errors, K warnings" summary. Exit
 	// 0 if there are no ERRORs, 1 if there are any (WARNs never change the exit
-	// code, so `if skilldozer check; then …` works as a gate). An empty store is clean
+	// code, so `if skilldozer --check; then …` works as a gate). An empty store is clean
 	// (0 skills, 0 errors, 0 warnings) -> exit 0 (check is validation: no skills ==
 	// nothing wrong, unlike --list which exits 1 on empty).
 	//
@@ -892,7 +895,7 @@ func readPrompt(r *bufio.Reader, w io.Writer, label, def string) (string, error)
 	return def, nil // empty Enter OR EOF-with-no-text ⇒ accept default
 }
 
-// chooseStore resolves the store directory for `skilldozer init` (PRD §8.2) via a
+// chooseStore resolves the store directory for `skilldozer --init` (PRD §8.2) via a
 // 4-step decision that is fully independent of os.Stdin/os.Stdout/os.Getwd: the
 // caller injects cwd, isTTY, the default store, and a prompt function, so the
 // logic is unit-testable without a real terminal (the contract FACTORING).
@@ -985,17 +988,17 @@ func expandHome(p string) string {
 func resolveStore(haveStore string) (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
-		return "", fmt.Errorf("skilldozer init: resolve cwd: %w", err)
+		return "", fmt.Errorf("skilldozer --init: resolve cwd: %w", err)
 	}
 	def, err := configpkg.DefaultStore()
 	if err != nil {
-		return "", fmt.Errorf("skilldozer init: resolve default store: %w", err)
+		return "", fmt.Errorf("skilldozer --init: resolve default store: %w", err)
 	}
 	r := bufio.NewReader(os.Stdin)
 	// Prompt dialog goes to stderr, not stdout. PRD §6.1 pins init's stdout to
 	// exactly the configured store path; the interactive "Where should skilldozer
 	// keep your skills? [default]:" line is user-facing prose, not result data,
-	// so a caller doing store="$(skilldozer init)" must not capture it.
+	// so a caller doing store="$(skilldozer --init)" must not capture it.
 	prompt := func(label, def string) (string, error) {
 		return readPrompt(r, os.Stderr, label, def)
 	}
@@ -1011,14 +1014,14 @@ func resolveStore(haveStore string) (string, error) {
 	store = expandHome(store)
 	abs, err := filepath.Abs(store)
 	if err != nil {
-		return "", fmt.Errorf("skilldozer init: absolutize store: %w", err)
+		return "", fmt.Errorf("skilldozer --init: absolutize store: %w", err)
 	}
 	return abs, nil
 }
 
 // exampleSkillTemplate is the PRD §11 example skill body, compiled into the binary as a
 // STRING CONSTANT (NOT go:embed — PRD §17 "nothing about the user's collection is compiled
-// in"; code_prd_delta.md G11). skilldozer init writes this verbatim into an EMPTY store's
+// in"; code_prd_delta.md G11). skilldozer --init writes this verbatim into an EMPTY store's
 // example/SKILL.md (PRD §8.2 step 3). NOTE: there is a SECOND copy of this exact text on
 // disk at skills/example/SKILL.md (P1.M3.T1.S1's repo asset); both MUST equal PRD §11.
 //
@@ -1048,7 +1051,7 @@ pi --skill "$(skilldozer example)"       # loads this skill into pi
 `
 
 // setupStore creates the skills store, seeds it if empty, and writes the config. It is
-// the create+seed+writeconfig half of `skilldozer init` (PRD §8.2 steps 2-4); the
+// the create+seed+writeconfig half of `skilldozer --init` (PRD §8.2 steps 2-4); the
 // store-CHOICE half is resolveStore (P1.M2.T2.S1), and run()'s `if c.init` dispatch
 // (P1.M2.T2.S3) calls both. Both targets are INJECTED as strings (store is already
 // absolute — resolveStore absolutized it; configPath is config.Path()'s result from
@@ -1070,31 +1073,31 @@ pi --skill "$(skilldozer example)"       # loads this skill into pi
 // Returns (seeded, nil) on success, or (false, err) on any fs failure — `seeded` is a
 // SUCCESS-PATH signal (run()/S3 prints "seeded" vs "adopted"); callers MUST check err
 // before reading seeded, so a config.Save failure after a successful seed still returns
-// (false, err). Errors are wrapped with a "skilldozer init: <step>: %w" prefix.
+// (false, err). Errors are wrapped with a "skilldozer --init: <step>: %w" prefix.
 func setupStore(store, configPath string) (seeded bool, err error) {
 	// (a) Ensure the store dir exists (idempotent — no-op if present).
 	if err := os.MkdirAll(store, 0o755); err != nil {
-		return false, fmt.Errorf("skilldozer init: create store dir %q: %w", store, err)
+		return false, fmt.Errorf("skilldozer --init: create store dir %q: %w", store, err)
 	}
 	// (b) Seed only if the store is EMPTY (zero entries of any kind).
 	entries, err := os.ReadDir(store)
 	if err != nil {
-		return false, fmt.Errorf("skilldozer init: read store dir %q: %w", store, err)
+		return false, fmt.Errorf("skilldozer --init: read store dir %q: %w", store, err)
 	}
 	if len(entries) == 0 {
 		exampleDir := filepath.Join(store, "example")
 		if err := os.MkdirAll(exampleDir, 0o755); err != nil {
-			return false, fmt.Errorf("skilldozer init: create example dir: %w", err)
+			return false, fmt.Errorf("skilldozer --init: create example dir: %w", err)
 		}
 		if err := os.WriteFile(filepath.Join(exampleDir, "SKILL.md"), []byte(exampleSkillTemplate), 0o644); err != nil {
-			return false, fmt.Errorf("skilldozer init: seed example SKILL.md: %w", err)
+			return false, fmt.Errorf("skilldozer --init: seed example SKILL.md: %w", err)
 		}
 		seeded = true
 	}
 	// (c) Non-empty: adopt in place. Do NOTHING to existing files (PRD §17). seeded stays false.
 	// (d) Always write the config with the (already-absolute) store path.
 	if err := configpkg.Save(configPath, configpkg.File{Store: store}); err != nil {
-		return false, fmt.Errorf("skilldozer init: write config %q: %w", configPath, err)
+		return false, fmt.Errorf("skilldozer --init: write config %q: %w", configPath, err)
 	}
 	return seeded, nil
 }
@@ -1117,7 +1120,7 @@ func completionScript(shell string) (string, bool) {
 	return "", false
 }
 
-// runInit is the `skilldozer init` orchestrator (PRD §8.2). run()'s dispatch calls it
+// runInit is the `skilldozer --init` orchestrator (PRD §8.2). run()'s dispatch calls it
 // when c.init is true (init is exclusive, so no other mode is active). It assembles the
 // three already-landed helpers — resolveStore (P1.M2.T2.S1: choose+absolutize the store),
 // configpkg.Path (the config-file location), setupStore (P1.M2.T2.S2: mkdir+seed+writeconfig)
@@ -1134,7 +1137,7 @@ func runInit(c config, stdout, stderr io.Writer) int {
 	// (1) Choose the store (haveStore != "" never blocks; resolveStore absolutizes).
 	store, err := resolveStore(c.initStore)
 	if err != nil {
-		fmt.Fprintln(stderr, err) // one-line (resolveStore wraps with "skilldozer init: …")
+		fmt.Fprintln(stderr, err) // one-line (resolveStore wraps with "skilldozer --init: …")
 		return 1
 	}
 	// (2) Resolve the config-file location (pure env fn; $SKILLDOZER_CONFIG or XDG default).
@@ -1146,7 +1149,7 @@ func runInit(c config, stdout, stderr io.Writer) int {
 	// (3) Create the store, seed it if empty, write the config (PRD §8.2 steps 2-4).
 	seeded, err := setupStore(store, cfgPath)
 	if err != nil {
-		fmt.Fprintln(stderr, err) // setupStore wraps with "skilldozer init: …"
+		fmt.Fprintln(stderr, err) // setupStore wraps with "skilldozer --init: …"
 		return 1
 	}
 	// (4) Report what happened. Uses `seeded` (S2's success-path signal). STDERR so §6.1's
@@ -1173,9 +1176,9 @@ func runInit(c config, stdout, stderr io.Writer) int {
 		// Mirror `skilldozer --path`: which rule won.
 		fmt.Fprintf(stderr, "(found via %s)\n", src)
 	}
-	// (6) `skilldozer check` report on the effective store (PRD §8.2 step 5). init renders
+	// (6) `skilldozer --check` report on the effective store (PRD §8.2 step 5). init renders
 	//     this report to STDERR (PRD §6.1: stdout = the store path only); the standalone
-	//     `check` subcommand keeps its report on stdout (its report IS its stdout product),
+	//     `--check` flag keeps its report on stdout (its report IS its stdout product),
 	//     so the two blocks intentionally DIVERGE — do NOT extract a shared helper. The
 	//     report is best-effort: a discover.Index failure is non-fatal (setup succeeded).
 	skills, ierr := discover.Index(dir)
@@ -1218,7 +1221,7 @@ func loginShellBase() string {
 	return strings.ToLower(filepath.Base(s))
 }
 
-// detectShell resolves the target shell for `skilldozer completion` (PRD §14.6
+// detectShell resolves the target shell for `skilldozer --completions` (PRD §14.6
 // "Shell detection", first wins): explicit --shell → $SKILLDOZER_SHELL →
 // basename($SHELL). It is a PURE function of its three string args — the caller
 // (runCompletion) supplies the env reads (c.completionShell,
@@ -1241,10 +1244,10 @@ func detectShell(explicit, envShell, loginShell string) (string, bool) {
 	return "", false
 }
 
-// runCompletion is the `skilldozer completion` handler (PRD §14.6 / §6.4).
+// runCompletion is the `skilldozer --completions` handler (PRD §14.6 / §6.4).
 // run()'s dispatch calls it when c.completion is true; completion is exclusive,
 // so no other mode is active. It resolves the shell via detectShell, then emits
-// the matching embedded script to stdout for `eval "$(skilldozer completion)"`
+// the matching embedded script to stdout for `eval "$(skilldozer --completions)"`
 // (PRD §14.6). Exit codes (PRD §6.4):
 //   - 0 on success (script on stdout);
 //   - 1 if the shell is undetectable (no --shell, no $SKILLDOZER_SHELL, no

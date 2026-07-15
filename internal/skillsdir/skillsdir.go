@@ -272,7 +272,7 @@ func findWalkUp() (dir string, src Source, found bool) {
 // ErrNotFound is returned by Find when every §8.3 rule misses (unconfigured). Its
 // message is the user-facing one-line fix (PRD §8.4 / §6.4): main prints it to
 // stderr and exits 1. Print it verbatim (err.Error()); do not wrap or prefix it.
-var ErrNotFound = errors.New("skilldozer is not configured; run `skilldozer init`")
+var ErrNotFound = errors.New("skilldozer is not configured; run `skilldozer --init`")
 
 // Find locates the skills directory per PRD §8.3 priority order (first hit wins):
 //

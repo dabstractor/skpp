@@ -320,9 +320,9 @@ func TestRunDefaultUnknownFlag(t *testing.T) {
 // exact stderr. Previously silently fell through to destructive auto-detect init.
 func TestRunInitStoreNoValueExits2(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := run([]string{"init", "--store"}, &out, &errOut)
+	code := run([]string{"--init", "--store"}, &out, &errOut)
 	if code != 2 {
-		t.Fatalf("run(init --store): code=%d; want 2 (missing --store value, PRD §6)", code)
+		t.Fatalf("run(--init --store): code=%d; want 2 (missing --store value, PRD §6)", code)
 	}
 	if out.Len() != 0 {
 		t.Errorf("stdout=%q; want EMPTY (§6.4: nothing on stdout on exit-2)", out.String())
@@ -386,9 +386,9 @@ func TestRunInitStoreNoValueDoesNotWriteConfig(t *testing.T) {
 	t.Chdir(t.TempDir())                  // escape the repo's walk-up rule (deterministic)
 
 	var out, errOut bytes.Buffer
-	code := run([]string{"init", "--store"}, &out, &errOut)
+	code := run([]string{"--init", "--store"}, &out, &errOut)
 	if code != 2 {
-		t.Fatalf("run(init --store): code=%d; want 2 (missing value, config must NOT be written)", code)
+		t.Fatalf("run(--init --store): code=%d; want 2 (missing value, config must NOT be written)", code)
 	}
 	// §6.4: stdout stays empty.
 	if out.Len() != 0 {
@@ -1218,35 +1218,35 @@ func TestRunVersionPrecedenceOverSearch(t *testing.T) {
 	}
 }
 
-// --- parseArgs: `check` subcommand (P1.M4.T10.S1) ---
+// --- parseArgs: `--check` flag (P1.M4.T10.S1) ---
 
-// The bare token "check" selects the check subcommand and is NOT captured as a tag.
-func TestParseArgsCheckSubcommand(t *testing.T) {
-	c := parseArgs([]string{"check"})
+// The flag "--check" selects the check mode and is NOT captured as a tag.
+func TestParseArgsCheckFlag(t *testing.T) {
+	c := parseArgs([]string{"--check"})
 	if !c.check {
-		t.Errorf("parseArgs(check): check=false; want true")
+		t.Errorf("parseArgs(--check): check=false; want true")
 	}
 	if len(c.tags) != 0 {
-		t.Errorf("parseArgs(check): tags=%v; want empty ('check' is a subcommand, not a tag)", c.tags)
+		t.Errorf("parseArgs(--check): tags=%v; want empty ('--check' is a flag, not a tag)", c.tags)
 	}
 }
 
-// `check` is recognized even when it follows a flag (--no-color check).
+// `--check` is recognized even when it follows a flag (--no-color --check).
 func TestParseArgsCheckAfterFlag(t *testing.T) {
-	c := parseArgs([]string{"--no-color", "check"})
+	c := parseArgs([]string{"--no-color", "--check"})
 	if !c.check {
-		t.Errorf("parseArgs(--no-color check): check=false; want true")
+		t.Errorf("parseArgs(--no-color --check): check=false; want true")
 	}
 	if !c.noColor {
-		t.Errorf("parseArgs(--no-color check): noColor=false; want true (flag still parsed)")
+		t.Errorf("parseArgs(--no-color --check): noColor=false; want true (flag still parsed)")
 	}
 }
 
-// `check` + a later positional: parseArgs captures both (run() now rejects this
+// `--check` + a later positional: parseArgs captures both (run() now rejects this
 // combo with exit 2 — see TestRunExclusivityCheckAndTags). Here we only assert
 // both are captured as set; run() ordering/exclusivity is tested below.
 func TestParseArgsCheckAndTagBothCaptured(t *testing.T) {
-	c := parseArgs([]string{"check", "sometag"})
+	c := parseArgs([]string{"--check", "sometag"})
 	if !c.check {
 		t.Errorf("check not set: %+v", c)
 	}
@@ -1255,29 +1255,29 @@ func TestParseArgsCheckAndTagBothCaptured(t *testing.T) {
 	}
 }
 
-// --- parseArgs: `skilldozer init` + `--store` (P1.M2.T1.S1) ---
+// --- parseArgs: `--init` flag + `--store` (P1.M2.T1.S1) ---
 
-// `init` alone is a RESERVED subcommand (like `check`): sets c.init and is NOT
+// `--init` sets the init mode (like `--check`): sets c.init and is NOT
 // captured as a tag.
-func TestParseArgsInitSubcommand(t *testing.T) {
-	c := parseArgs([]string{"init"})
+func TestParseArgsInitFlag(t *testing.T) {
+	c := parseArgs([]string{"--init"})
 	if !c.init {
-		t.Errorf("parseArgs(init): init=false; want true")
+		t.Errorf("parseArgs(--init): init=false; want true")
 	}
 	if len(c.tags) != 0 {
-		t.Errorf("parseArgs(init): tags=%v; want empty ('init' is a subcommand, not a tag)", c.tags)
+		t.Errorf("parseArgs(--init): tags=%v; want empty ('--init' is a flag, not a tag)", c.tags)
 	}
 	if c.initStore != "" {
-		t.Errorf("parseArgs(init): initStore=%q; want empty", c.initStore)
+		t.Errorf("parseArgs(--init): initStore=%q; want empty", c.initStore)
 	}
 	if c.storeMissingValue {
-		t.Errorf("parseArgs(init): storeMissingValue=true; want false (no --store token; must still prompt)")
+		t.Errorf("parseArgs(--init): storeMissingValue=true; want false (no --store token; must still prompt)")
 	}
 }
 
-// `init <dir>` captures the positional <dir> into c.initStore (NOT into tags).
+// `--init <dir>` captures the positional <dir> into c.initStore (NOT into tags).
 func TestParseArgsInitPositionalDir(t *testing.T) {
-	c := parseArgs([]string{"init", "/tmp/x"})
+	c := parseArgs([]string{"--init", "/tmp/x"})
 	if !c.init {
 		t.Errorf("init not set")
 	}
@@ -1289,9 +1289,9 @@ func TestParseArgsInitPositionalDir(t *testing.T) {
 	}
 }
 
-// `init --store <dir>` long form: --store fills initStore (init already set).
+// `--init --store <dir>` long form: --store fills initStore (init already set).
 func TestParseArgsInitStoreLongForm(t *testing.T) {
-	c := parseArgs([]string{"init", "--store", "/tmp/x"})
+	c := parseArgs([]string{"--init", "--store", "/tmp/x"})
 	if !c.init {
 		t.Errorf("init not set")
 	}
@@ -1302,13 +1302,13 @@ func TestParseArgsInitStoreLongForm(t *testing.T) {
 		t.Errorf("tags=%v; want empty", c.tags)
 	}
 	if c.storeMissingValue {
-		t.Errorf("init --store /tmp/x: storeMissingValue=true; want false (value present)")
+		t.Errorf("--init --store /tmp/x: storeMissingValue=true; want false (value present)")
 	}
 }
 
-// `init --store=<dir>` '='-form: --store fills initStore.
+// `--init --store=<dir>` '='-form: --store fills initStore.
 func TestParseArgsInitStoreEqualsForm(t *testing.T) {
-	c := parseArgs([]string{"init", "--store=/tmp/x"})
+	c := parseArgs([]string{"--init", "--store=/tmp/x"})
 	if !c.init {
 		t.Errorf("init not set")
 	}
@@ -1316,7 +1316,7 @@ func TestParseArgsInitStoreEqualsForm(t *testing.T) {
 		t.Errorf("initStore=%q; want /tmp/x", c.initStore)
 	}
 	if c.storeMissingValue {
-		t.Errorf("init --store=/tmp/x: storeMissingValue=true; want false (value present)")
+		t.Errorf("--init --store=/tmp/x: storeMissingValue=true; want false (value present)")
 	}
 }
 
@@ -1338,15 +1338,15 @@ func TestParseArgsStoreWithoutInitToken(t *testing.T) {
 	}
 }
 
-// Issue 2 (P1.M1.T2.S1): `init --store` (last token, no value) records the signal.
-// c.init=true (init token); initStore=""; run() (S2) rejects before dispatch.
+// Issue 2 (P1.M1.T2.S1): `--init --store` (last token, no value) records the signal.
+// c.init=true (init flag); initStore=""; run() (S2) rejects before dispatch.
 func TestParseArgsInitStoreLongFormNoValueSetsSignal(t *testing.T) {
-	c := parseArgs([]string{"init", "--store"})
+	c := parseArgs([]string{"--init", "--store"})
 	if !c.init {
-		t.Errorf("init --store: init=false; want true (init token set it)")
+		t.Errorf("--init --store: init=false; want true (init flag set it)")
 	}
 	if c.initStore != "" {
-		t.Errorf("init --store: initStore=%q; want empty", c.initStore)
+		t.Errorf("--init --store: initStore=%q; want empty", c.initStore)
 	}
 	if !c.storeMissingValue {
 		t.Errorf("init --store: storeMissingValue=false; want true")
@@ -1381,28 +1381,28 @@ func TestParseArgsStoreNoValueNoInitTokenSetsSignal(t *testing.T) {
 	}
 }
 
-// --- parseArgs: `skilldozer completion` + `--shell` (P1.M2.T1.S1) ---
+// --- parseArgs: `--completions` flag + `--shell` (P1.M2.T1.S1) ---
 
-// `completion` alone is a RESERVED subcommand (like `check`): sets c.completion
+// `--completions` sets the completion mode (like `--check`): sets c.completion
 // and is NOT captured as a tag. (Dispatch/emission is P1.M2.T2; these tests are
 // parseArgs-level only.)
-func TestParseArgsCompletionSubcommand(t *testing.T) {
-	c := parseArgs([]string{"completion"})
+func TestParseArgsCompletionsFlag(t *testing.T) {
+	c := parseArgs([]string{"--completions"})
 	if !c.completion {
-		t.Errorf("parseArgs(completion): completion=false; want true")
+		t.Errorf("parseArgs(--completions): completion=false; want true")
 	}
 	if len(c.tags) != 0 {
-		t.Errorf("parseArgs(completion): tags=%v; want empty ('completion' is a subcommand, not a tag)", c.tags)
+		t.Errorf("parseArgs(--completions): tags=%v; want empty ('--completions' is a flag, not a tag)", c.tags)
 	}
 	if c.completionShell != "" {
-		t.Errorf("parseArgs(completion): completionShell=%q; want empty", c.completionShell)
+		t.Errorf("parseArgs(--completions): completionShell=%q; want empty", c.completionShell)
 	}
 }
 
-// `completion --shell bash` long form: --shell fills completionShell (completion
+// `--completions --shell bash` long form: --shell fills completionShell (completion
 // already set). --shell implies completion (mirrors --store implies init).
-func TestParseArgsCompletionShellLongForm(t *testing.T) {
-	c := parseArgs([]string{"completion", "--shell", "bash"})
+func TestParseArgsCompletionsShellLongForm(t *testing.T) {
+	c := parseArgs([]string{"--completions", "--shell", "bash"})
 	if !c.completion {
 		t.Errorf("completion not set")
 	}
@@ -1414,9 +1414,9 @@ func TestParseArgsCompletionShellLongForm(t *testing.T) {
 	}
 }
 
-// `completion --shell=bash` '='-form: --shell fills completionShell.
-func TestParseArgsCompletionShellEqualsForm(t *testing.T) {
-	c := parseArgs([]string{"completion", "--shell=bash"})
+// `--completions --shell=bash` '='-form: --shell fills completionShell.
+func TestParseArgsCompletionsShellEqualsForm(t *testing.T) {
+	c := parseArgs([]string{"--completions", "--shell=bash"})
 	if !c.completion {
 		t.Errorf("completion not set")
 	}
@@ -1441,9 +1441,9 @@ func TestParseArgsShellImpliesCompletion(t *testing.T) {
 	}
 }
 
-// Regression guard: the `init <dir>` positional must NOT also appear in tags.
+// Regression guard: the `--init <dir>` positional must NOT also appear in tags.
 func TestParseArgsInitDirNotCapturedAsTag(t *testing.T) {
-	c := parseArgs([]string{"init", "/tmp/x"})
+	c := parseArgs([]string{"--init", "/tmp/x"})
 	for _, tg := range c.tags {
 		if tg == "/tmp/x" {
 			t.Errorf("dir leaked into tags: %v", c.tags)
@@ -1451,19 +1451,84 @@ func TestParseArgsInitDirNotCapturedAsTag(t *testing.T) {
 	}
 }
 
-// Issue 4 (P1.M2.T2.S1): a duplicate reserved `init` token is captured into c.tags
-// (not swallowed, not used as the store) so exclusivityError's init+tags branch
-// rejects `init init` with exit 2. A literal store dir named "init" must use --store.
-func TestParseArgsInitInitCapturedAsTag(t *testing.T) {
-	c := parseArgs([]string{"init", "init"})
+// Namespace safety (decision 19 / PRD §6.3): `--init` owns its following positional
+// as the store dir, so a store literally named "init" is accepted (--init init
+// ⇒ initStore="init", NOT a tag, NOT special-cased). Supersedes the old Issue-4
+// regression (duplicate bare `init` → tag), which had no flag-world equivalent.
+func TestParseArgsInitFlagLiteralInitStore(t *testing.T) {
+	c := parseArgs([]string{"--init", "init"})
 	if !c.init {
-		t.Errorf("parseArgs(init init): init=false; want true")
+		t.Errorf("parseArgs(--init init): init=false; want true")
+	}
+	if c.initStore != "init" {
+		t.Errorf("parseArgs(--init init): initStore=%q; want \"init\" (positional consumed as the store)", c.initStore)
+	}
+	if len(c.tags) != 0 {
+		t.Errorf("parseArgs(--init init): tags=%v; want empty (init literal is the store, not a tag)", c.tags)
+	}
+}
+
+// Namespace safety (decision 19 / PRD §6.3): a bare "check" is a skill TAG, never
+// the check mode (--check is the mode).
+func TestParseArgsBareCheckNowTag(t *testing.T) {
+	c := parseArgs([]string{"check"})
+	if c.check {
+		t.Errorf("bare check: check=true; want false (it is a tag)")
+	}
+	if len(c.tags) != 1 || c.tags[0] != "check" {
+		t.Errorf("bare check: tags=%v; want [check]", c.tags)
+	}
+}
+
+// Namespace safety (decision 19 / PRD §6.3): a bare "init" is a skill TAG, never
+// the init mode (--init is the mode).
+func TestParseArgsBareInitNowTag(t *testing.T) {
+	c := parseArgs([]string{"init"})
+	if c.init {
+		t.Errorf("bare init: init=true; want false (it is a tag)")
 	}
 	if len(c.tags) != 1 || c.tags[0] != "init" {
-		t.Errorf("parseArgs(init init): tags=%v; want [init] (duplicate init captured as a tag)", c.tags)
+		t.Errorf("bare init: tags=%v; want [init]", c.tags)
 	}
-	if c.initStore != "" {
-		t.Errorf("parseArgs(init init): initStore=%q; want empty (init is NOT a store dir)", c.initStore)
+}
+
+// Namespace safety (decision 19 / PRD §6.3): a bare "completions" is a skill TAG,
+// never the completion mode (--completions is the mode).
+func TestParseArgsBareCompletionsNowTag(t *testing.T) {
+	c := parseArgs([]string{"completions"})
+	if c.completion {
+		t.Errorf("bare completions: completion=true; want false (it is a tag)")
+	}
+	if len(c.tags) != 1 || c.tags[0] != "completions" {
+		t.Errorf("bare completions: tags=%v; want [completions]", c.tags)
+	}
+}
+
+// `--init <dir>` owns its following positional as the store (§6.3): not captured as a tag.
+func TestParseArgsInitFlagWithDir(t *testing.T) {
+	c := parseArgs([]string{"--init", "/tmp/x"})
+	if !c.init {
+		t.Errorf("--init /tmp/x: init=false; want true")
+	}
+	if c.initStore != "/tmp/x" {
+		t.Errorf("--init /tmp/x: initStore=%q; want /tmp/x", c.initStore)
+	}
+	if len(c.tags) != 0 {
+		t.Errorf("--init /tmp/x: tags=%v; want empty", c.tags)
+	}
+}
+
+// `--init=<dir>` '='-form: sets init + initStore (mirrors --store=).
+func TestParseArgsInitEqualsDir(t *testing.T) {
+	c := parseArgs([]string{"--init=/tmp/x"})
+	if !c.init {
+		t.Errorf("--init=/tmp/x: init=false; want true")
+	}
+	if c.initStore != "/tmp/x" {
+		t.Errorf("--init=/tmp/x: initStore=%q; want /tmp/x", c.initStore)
+	}
+	if len(c.tags) != 0 {
+		t.Errorf("--init=/tmp/x: tags=%v; want empty", c.tags)
 	}
 }
 
@@ -1863,48 +1928,48 @@ func TestRunExclusivityPathAndTag(t *testing.T) {
 	}
 }
 
-// check + tag (check ignores tags so the combo is meaningless → exit 2).
+// --check + tag (check ignores tags so the combo is meaningless → exit 2).
 func TestRunExclusivityCheckAndTags(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := run([]string{"check", "foo"}, &out, &errOut)
+	code := run([]string{"--check", "foo"}, &out, &errOut)
 	if code != 2 {
-		t.Fatalf("run(check foo): code=%d; want 2 (check + tag)", code)
+		t.Fatalf("run(--check foo): code=%d; want 2 (--check + tag)", code)
 	}
 	if out.Len() != 0 {
 		t.Errorf("stdout=%q; want empty", out.String())
 	}
-	if !strings.Contains(errOut.String(), "check") {
-		t.Errorf("stderr=%q; want a message mentioning check", errOut.String())
+	if !strings.Contains(errOut.String(), "--check") {
+		t.Errorf("stderr=%q; want a message mentioning --check", errOut.String())
 	}
 }
 
-// check + a listing mode (modes are mutually exclusive → exit 2).
+// --check + a listing mode (modes are mutually exclusive → exit 2).
 func TestRunExclusivityCheckAndList(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := run([]string{"check", "--list"}, &out, &errOut)
+	code := run([]string{"--check", "--list"}, &out, &errOut)
 	if code != 2 {
-		t.Fatalf("run(check --list): code=%d; want 2 (check + mode)", code)
+		t.Fatalf("run(--check --list): code=%d; want 2 (--check + mode)", code)
 	}
 	if out.Len() != 0 {
 		t.Errorf("stdout=%q; want empty", out.String())
 	}
 }
 
-// check + --path also exits 2 (N1: previously fell through to dispatch and ran
+// --check + --path also exits 2 (N1: previously fell through to dispatch and ran
 // --path, silently ignoring `check`. `--path` is now in the check+mode set, so
-// `check --path` is rejected just like check+list/search/all — closing the
+// `--check --path` is rejected just like check+list/search/all — closing the
 // exclusivity asymmetry the prior `--path`-omitted set left open.)
 func TestRunExclusivityCheckAndPath(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := run([]string{"check", "--path"}, &out, &errOut)
+	code := run([]string{"--check", "--path"}, &out, &errOut)
 	if code != 2 {
-		t.Fatalf("run(check --path): code=%d; want 2 (N1: check + --path)", code)
+		t.Fatalf("run(--check --path): code=%d; want 2 (N1: --check + --path)", code)
 	}
 	if out.Len() != 0 {
 		t.Errorf("stdout=%q; want empty (N1)", out.String())
 	}
-	if !strings.Contains(errOut.String(), "check") || !strings.Contains(errOut.String(), "--path") {
-		t.Errorf("stderr=%q; want a message mentioning check and --path", errOut.String())
+	if !strings.Contains(errOut.String(), "--check") || !strings.Contains(errOut.String(), "--path") {
+		t.Errorf("stderr=%q; want a message mentioning --check and --path", errOut.String())
 	}
 }
 
@@ -1913,83 +1978,83 @@ func TestRunExclusivityCheckAndPath(t *testing.T) {
 // init is its own exclusive mode (PRD §6.3 / §8.2). These run-level tests need NO
 // store fixture / env: exclusivity runs BEFORE skillsdir.Find() (run step 4).
 
-// init + --list -> exit 2, empty stdout.
+// --init + --list -> exit 2, empty stdout.
 func TestRunExclusivityInitAndList(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := run([]string{"init", "--list"}, &out, &errOut)
+	code := run([]string{"--init", "--list"}, &out, &errOut)
 	if code != 2 {
-		t.Fatalf("run(init --list): code=%d; want 2", code)
+		t.Fatalf("run(--init --list): code=%d; want 2", code)
 	}
 	if out.Len() != 0 {
 		t.Errorf("stdout=%q; want empty", out.String())
 	}
-	if !strings.Contains(errOut.String(), "init") {
-		t.Errorf("stderr=%q; want a message mentioning init", errOut.String())
+	if !strings.Contains(errOut.String(), "--init") {
+		t.Errorf("stderr=%q; want a message mentioning --init", errOut.String())
 	}
 }
 
-// init + --path -> exit 2, empty stdout.
+// --init + --path -> exit 2, empty stdout.
 func TestRunExclusivityInitAndPath(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := run([]string{"init", "--path"}, &out, &errOut)
+	code := run([]string{"--init", "--path"}, &out, &errOut)
 	if code != 2 {
-		t.Fatalf("run(init --path): code=%d; want 2", code)
+		t.Fatalf("run(--init --path): code=%d; want 2", code)
 	}
 	if out.Len() != 0 {
 		t.Errorf("stdout=%q; want empty", out.String())
 	}
-	if !strings.Contains(errOut.String(), "init") {
-		t.Errorf("stderr=%q; want a message mentioning init", errOut.String())
+	if !strings.Contains(errOut.String(), "--init") {
+		t.Errorf("stderr=%q; want a message mentioning --init", errOut.String())
 	}
 }
 
-// init check: the GOTCHA #1 guard lets `check` reach its case (c.check) instead
-// of being swallowed as initStore, so exclusivity flags init+check -> exit 2.
+// --init --check: the GOTCHA #1 guard lets `--check` reach its case (c.check)
+// instead of being swallowed as initStore, so exclusivity flags init+check -> exit 2.
 func TestRunExclusivityInitAndCheck(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := run([]string{"init", "check"}, &out, &errOut)
+	code := run([]string{"--init", "--check"}, &out, &errOut)
 	if code != 2 {
-		t.Fatalf("run(init check): code=%d; want 2", code)
+		t.Fatalf("run(--init --check): code=%d; want 2", code)
 	}
 	if out.Len() != 0 {
 		t.Errorf("stdout=%q; want empty", out.String())
 	}
-	if !strings.Contains(errOut.String(), "init") {
-		t.Errorf("stderr=%q; want a message mentioning init", errOut.String())
+	if !strings.Contains(errOut.String(), "--init") {
+		t.Errorf("stderr=%q; want a message mentioning --init", errOut.String())
 	}
 }
 
-// init + --search <q> -> exit 2.
+// --init + --search <q> -> exit 2.
 func TestRunExclusivityInitAndSearch(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := run([]string{"init", "--search", "q"}, &out, &errOut)
+	code := run([]string{"--init", "--search", "q"}, &out, &errOut)
 	if code != 2 {
-		t.Fatalf("run(init --search q): code=%d; want 2", code)
+		t.Fatalf("run(--init --search q): code=%d; want 2", code)
 	}
 	if out.Len() != 0 {
 		t.Errorf("stdout=%q; want empty", out.String())
 	}
 }
 
-// init + --all -> exit 2.
+// --init + --all -> exit 2.
 func TestRunExclusivityInitAndAll(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := run([]string{"init", "--all"}, &out, &errOut)
+	code := run([]string{"--init", "--all"}, &out, &errOut)
 	if code != 2 {
-		t.Fatalf("run(init --all): code=%d; want 2", code)
+		t.Fatalf("run(--init --all): code=%d; want 2", code)
 	}
 	if out.Len() != 0 {
 		t.Errorf("stdout=%q; want empty", out.String())
 	}
 }
 
-// `init foo bar`: foo -> initStore (consumed), bar -> tags (stray) -> init+tags
+// `--init foo bar`: foo -> initStore (consumed), bar -> tags (stray) -> init+tags
 // exit 2.
 func TestRunExclusivityInitAndStrayTag(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := run([]string{"init", "foo", "bar"}, &out, &errOut)
+	code := run([]string{"--init", "foo", "bar"}, &out, &errOut)
 	if code != 2 {
-		t.Fatalf("run(init foo bar): code=%d; want 2 (stray tag)", code)
+		t.Fatalf("run(--init foo bar): code=%d; want 2 (stray tag)", code)
 	}
 	if out.Len() != 0 {
 		t.Errorf("stdout=%q; want empty", out.String())
@@ -1999,23 +2064,25 @@ func TestRunExclusivityInitAndStrayTag(t *testing.T) {
 	}
 }
 
-// Issue 4 (P1.M2.T2.S1): `init init` now exits 2 (was 0, config written). The
-// duplicate `init` is captured as a tag, so exclusivityError's init+tags branch
-// fires (the same path `init foo bar` uses). exclusivity runs at run() step 5,
-// BEFORE runInit/config.Save (step 6), so exit 2 guarantees the config is NOT written.
-func TestRunExclusivityInitInit(t *testing.T) {
+// Decision 19 / PRD §6.3: `--init` owns ONE positional (the store). A SECOND
+// positional is a stray tag -> init+tags conflict -> exit 2, and exclusivity fires
+// BEFORE init dispatch so the config is NOT written. (Supersedes the old Issue-4
+// `init init` regression, which had no flag-world equivalent: `--init --init` is
+// idempotent and `--init init` makes "init" the store dir, so only a second
+// positional can trigger an init+tags conflict.)
+func TestRunExclusivityInitInitStrayTagNoConfigWrite(t *testing.T) {
 	cfg := filepath.Join(t.TempDir(), "must-not-exist.yaml")
 	t.Setenv("SKILLDOZER_CONFIG", cfg)
 	var out, errOut bytes.Buffer
-	code := run([]string{"init", "init"}, &out, &errOut)
+	code := run([]string{"--init", "store1", "straytag"}, &out, &errOut)
 	if code != 2 {
-		t.Fatalf("run(init init): code=%d; want 2 (Issue 4: duplicate init is a conflict)", code)
+		t.Fatalf("run(--init store1 straytag): code=%d; want 2 (--init + stray tag)", code)
 	}
 	if out.Len() != 0 {
 		t.Errorf("stdout=%q; want empty", out.String())
 	}
-	if !strings.Contains(errOut.String(), "init") {
-		t.Errorf("stderr=%q; want a message mentioning init", errOut.String())
+	if !strings.Contains(errOut.String(), "--init") {
+		t.Errorf("stderr=%q; want a message mentioning --init", errOut.String())
 	}
 	// Contract OUTPUT: the config is NOT written (exclusivity fires before init dispatch).
 	if _, err := os.Stat(cfg); !os.IsNotExist(err) {
@@ -2046,67 +2113,66 @@ func TestRunHelpShowsInitRow(t *testing.T) {
 // run-level tests need NO store fixture / env: exclusivity runs BEFORE
 // skillsdir.Find() (run step 4).
 
-// completion + a stray tag -> exit 2, empty stdout.
+// --completions + a stray tag -> exit 2, empty stdout.
 func TestRunExclusivityCompletionAndTag(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := run([]string{"completion", "example"}, &out, &errOut)
+	code := run([]string{"--completions", "example"}, &out, &errOut)
 	if code != 2 {
-		t.Fatalf("run(completion example): code=%d; want 2 (completion + tag)", code)
+		t.Fatalf("run(--completions example): code=%d; want 2 (--completions + tag)", code)
 	}
 	if out.Len() != 0 {
 		t.Errorf("stdout=%q; want empty", out.String())
 	}
-	if !strings.Contains(errOut.String(), "completion") {
-		t.Errorf("stderr=%q; want a message mentioning completion", errOut.String())
+	if !strings.Contains(errOut.String(), "--completions") {
+		t.Errorf("stderr=%q; want a message mentioning --completions", errOut.String())
 	}
 }
 
-// completion + --list -> exit 2, empty stdout.
+// --completions + --list -> exit 2, empty stdout.
 func TestRunExclusivityCompletionAndList(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := run([]string{"completion", "--list"}, &out, &errOut)
+	code := run([]string{"--completions", "--list"}, &out, &errOut)
 	if code != 2 {
-		t.Fatalf("run(completion --list): code=%d; want 2", code)
+		t.Fatalf("run(--completions --list): code=%d; want 2", code)
 	}
 	if out.Len() != 0 {
 		t.Errorf("stdout=%q; want empty", out.String())
 	}
-	if !strings.Contains(errOut.String(), "completion") {
-		t.Errorf("stderr=%q; want a message mentioning completion", errOut.String())
+	if !strings.Contains(errOut.String(), "--completions") {
+		t.Errorf("stderr=%q; want a message mentioning --completions", errOut.String())
 	}
 }
 
-// `check completion`: both reserved tokens reach their own cases (c.check +
+// `--check --completions`: both flags reach their own cases (c.check +
 // c.completion); the completion family catches c.completion && c.check -> exit 2.
 func TestRunExclusivityCheckAndCompletion(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := run([]string{"check", "completion"}, &out, &errOut)
+	code := run([]string{"--check", "--completions"}, &out, &errOut)
 	if code != 2 {
-		t.Fatalf("run(check completion): code=%d; want 2", code)
+		t.Fatalf("run(--check --completions): code=%d; want 2", code)
 	}
 	if out.Len() != 0 {
 		t.Errorf("stdout=%q; want empty", out.String())
 	}
-	if !strings.Contains(errOut.String(), "completion") {
-		t.Errorf("stderr=%q; want a message mentioning completion", errOut.String())
+	if !strings.Contains(errOut.String(), "--completions") {
+		t.Errorf("stderr=%q; want a message mentioning --completions", errOut.String())
 	}
 }
 
-// `init completion`: GOTCHA A — the init-guard extension (`&& next !=
-// "completion"`) lets "completion" reach its case (c.completion) instead of being
-// swallowed as initStore, so the completion family catches c.completion && c.init
-// -> exit 2 (consistent with `init check` / `init init`).
+// `--init --completions`: both flags reach their own cases (c.init +
+// c.completion); the completion family catches c.completion && c.init -> exit 2
+// (consistent with `--init --check`).
 func TestRunExclusivityInitAndCompletion(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := run([]string{"init", "completion"}, &out, &errOut)
+	code := run([]string{"--init", "--completions"}, &out, &errOut)
 	if code != 2 {
-		t.Fatalf("run(init completion): code=%d; want 2 (GOTCHA A: init-guard must defer completion to its case)", code)
+		t.Fatalf("run(--init --completions): code=%d; want 2 (--init + --completions flags collide)", code)
 	}
 	if out.Len() != 0 {
 		t.Errorf("stdout=%q; want empty", out.String())
 	}
-	if !strings.Contains(errOut.String(), "completion") {
-		t.Errorf("stderr=%q; want a message mentioning completion", errOut.String())
+	if !strings.Contains(errOut.String(), "--completions") {
+		t.Errorf("stderr=%q; want a message mentioning --completions", errOut.String())
 	}
 }
 
