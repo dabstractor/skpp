@@ -244,7 +244,7 @@ func TestRunPathFailureErrNotFound(t *testing.T) {
 		t.Errorf("run(--path) failure stdout=%q; want EMPTY (§6.4: print nothing on failure)", out.String())
 	}
 	msg := errOut.String()
-	for _, want := range []string{"run", "skilldozer init"} {
+	for _, want := range []string{"run", "skilldozer --init"} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("run(--path) failure stderr=%q; missing substring %q", msg, want)
 		}
@@ -487,7 +487,7 @@ func TestRunListSkillsDirUnresolvableExit1(t *testing.T) {
 	if out.Len() != 0 {
 		t.Errorf("run(--list) unresolvable stdout=%q; want empty", out.String())
 	}
-	if !strings.Contains(errOut.String(), "skilldozer init") {
+	if !strings.Contains(errOut.String(), "skilldozer --init") {
 		t.Errorf("run(--list) unresolvable stderr=%q; want the one-line fix", errOut.String())
 	}
 }
@@ -701,7 +701,7 @@ func TestRunTagSkillsDirUnresolvable(t *testing.T) {
 	if out.Len() != 0 {
 		t.Errorf("stdout=%q; want EMPTY", out.String())
 	}
-	if !strings.Contains(errOut.String(), "skilldozer init") {
+	if !strings.Contains(errOut.String(), "skilldozer --init") {
 		t.Errorf("stderr=%q; want the one-line fix", errOut.String())
 	}
 }
@@ -959,7 +959,7 @@ func TestRunAllSkillsDirUnresolvable(t *testing.T) {
 	if out.Len() != 0 {
 		t.Errorf("stdout=%q; want empty", out.String())
 	}
-	if !strings.Contains(errOut.String(), "skilldozer init") {
+	if !strings.Contains(errOut.String(), "skilldozer --init") {
 		t.Errorf("stderr=%q; want the one-line fix", errOut.String())
 	}
 }
@@ -1199,7 +1199,7 @@ func TestRunSearchSkillsDirUnresolvable(t *testing.T) {
 	if out.Len() != 0 {
 		t.Errorf("stdout=%q; want empty", out.String())
 	}
-	if !strings.Contains(errOut.String(), "skilldozer init") {
+	if !strings.Contains(errOut.String(), "skilldozer --init") {
 		t.Errorf("stderr=%q; want the one-line fix", errOut.String())
 	}
 }
@@ -1540,7 +1540,7 @@ func TestRunCheckCleanStore(t *testing.T) {
 	dir := sampleStore(t)
 	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
-	code := run([]string{"check"}, &out, &errOut)
+	code := run([]string{"--check"}, &out, &errOut)
 	if code != 0 {
 		t.Fatalf("run(check) clean: code=%d; want 0", code)
 	}
@@ -1571,7 +1571,7 @@ func TestRunCheckReportsMissingNameExit1(t *testing.T) {
 	})
 	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
-	code := run([]string{"check"}, &out, &errOut)
+	code := run([]string{"--check"}, &out, &errOut)
 	if code != 1 {
 		t.Fatalf("run(check) with a bad skill: code=%d; want 1", code)
 	}
@@ -1592,7 +1592,7 @@ func TestRunCheckReportsDuplicateNames(t *testing.T) {
 	})
 	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
-	code := run([]string{"check"}, &out, &errOut)
+	code := run([]string{"--check"}, &out, &errOut)
 	if code != 1 {
 		t.Fatalf("run(check) dups: code=%d; want 1", code)
 	}
@@ -1615,7 +1615,7 @@ func TestRunCheckWarnOnlyExitsZero(t *testing.T) {
 	})
 	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
-	code := run([]string{"check"}, &out, &errOut)
+	code := run([]string{"--check"}, &out, &errOut)
 	if code != 0 {
 		t.Fatalf("run(check) warn-only: code=%d; want 0 (WARNs never fail)", code)
 	}
@@ -1633,7 +1633,7 @@ func TestRunCheckEmptyStoreExit0(t *testing.T) {
 	dir := writeSkillTree(t, map[string]string{}) // empty skills tree
 	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
-	code := run([]string{"check"}, &out, &errOut)
+	code := run([]string{"--check"}, &out, &errOut)
 	if code != 0 {
 		t.Fatalf("run(check) empty store: code=%d; want 0", code)
 	}
@@ -1647,14 +1647,14 @@ func TestRunCheckSkillsDirUnresolvable(t *testing.T) {
 	unsetSkillsEnv(t)
 	t.Chdir(t.TempDir()) // all §8.3 rules miss
 	var out, errOut bytes.Buffer
-	code := run([]string{"check"}, &out, &errOut)
+	code := run([]string{"--check"}, &out, &errOut)
 	if code != 1 {
 		t.Fatalf("run(check) unresolvable: code=%d; want 1", code)
 	}
 	if out.Len() != 0 {
 		t.Errorf("stdout=%q; want empty (no store -> no report)", out.String())
 	}
-	if !strings.Contains(errOut.String(), "skilldozer init") {
+	if !strings.Contains(errOut.String(), "skilldozer --init") {
 		t.Errorf("stderr=%q; want the one-line fix", errOut.String())
 	}
 }
@@ -1667,7 +1667,7 @@ func TestRunCheckStatusColumnAligned(t *testing.T) {
 	})
 	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
-	run([]string{"check"}, &out, &errOut)
+	run([]string{"--check"}, &out, &errOut)
 	for _, line := range strings.Split(strings.TrimRight(out.String(), "\n"), "\n") {
 		if line == "" || strings.HasPrefix(line, "0 ") || strings.Contains(line, " skills,") {
 			continue // summary line
@@ -1688,7 +1688,7 @@ func TestRunVersionPrecedenceOverCheck(t *testing.T) {
 	dir := sampleStore(t)
 	t.Setenv("SKILLDOZER_SKILLS_DIR", dir)
 	var out, errOut bytes.Buffer
-	code := run([]string{"check", "--version"}, &out, &errOut)
+	code := run([]string{"--check", "--version"}, &out, &errOut)
 	if code != 0 {
 		t.Fatalf("run(check --version): code=%d; want 0 (version precedence)", code)
 	}
@@ -2100,7 +2100,7 @@ func TestRunHelpShowsInitRow(t *testing.T) {
 		t.Fatalf("run(--help): code=%d; want 0", code)
 	}
 	got := out.String()
-	for _, want := range []string{"skilldozer init", "--store <dir>"} {
+	for _, want := range []string{"skilldozer --init", "--store <dir>"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("run(--help) stdout missing %q:\n%s", want, got)
 		}
@@ -2186,7 +2186,7 @@ func TestRunHelpShowsCompletionRow(t *testing.T) {
 		t.Fatalf("run(--help): code=%d; want 0", code)
 	}
 	got := out.String()
-	for _, want := range []string{"skilldozer completion", "--shell"} {
+	for _, want := range []string{"skilldozer --completions", "--shell"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("run(--help) stdout missing %q:\n%s", want, got)
 		}
@@ -2833,7 +2833,7 @@ func TestRunInitStoreWritesConfigCreatesStorePrintsPathExit0(t *testing.T) {
 	t.Chdir(t.TempDir())                  // escape the repo's walk-up rule (deterministic)
 
 	var out, errOut bytes.Buffer
-	code := run([]string{"init", "--store", store}, &out, &errOut)
+	code := run([]string{"--init", "--store", store}, &out, &errOut)
 	if code != 0 {
 		t.Fatalf("run(init --store): code=%d; want 0; stderr=%q", code, errOut.String())
 	}
@@ -2893,7 +2893,7 @@ func TestRunInitStoreTildeExpandsHome(t *testing.T) {
 	t.Chdir(t.TempDir())                  // cwd != home: without expandHome, store would be <cwd>/~/sub
 
 	var out, errOut bytes.Buffer
-	code := run([]string{"init", "--store", "~/sub"}, &out, &errOut)
+	code := run([]string{"--init", "--store", "~/sub"}, &out, &errOut)
 	if code != 0 {
 		t.Fatalf("run(init --store ~/sub): code=%d; want 0; stderr=%q", code, errOut.String())
 	}
@@ -2943,7 +2943,7 @@ func TestRunBareTagUnconfiguredNeverPrompts(t *testing.T) {
 		t.Errorf("run(someTag) stdout=%q; want EMPTY (§6.4: print nothing on failure)", out.String())
 	}
 	msg := errOut.String()
-	for _, want := range []string{"run", "skilldozer init"} {
+	for _, want := range []string{"run", "skilldozer --init"} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("run(someTag) stderr=%q; missing substring %q (unconfigured hint)", msg, want)
 		}
@@ -3018,7 +3018,7 @@ func TestEmbeddedCompletionsMatchOnDisk(t *testing.T) {
 // → exit 0, stdout contains the bash-script marker, stderr empty.
 func TestRunCompletionBashScript(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := run([]string{"completion", "--shell", "bash"}, &out, &errOut)
+	code := run([]string{"--completions", "--shell", "bash"}, &out, &errOut)
 	if code != 0 {
 		t.Errorf("run(completion --shell bash): code=%d; want 0", code)
 	}
@@ -3034,7 +3034,7 @@ func TestRunCompletionBashScript(t *testing.T) {
 // → exit 0, stdout contains the fish-script marker.
 func TestRunCompletionFishScript(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := run([]string{"completion", "--shell", "fish"}, &out, &errOut)
+	code := run([]string{"--completions", "--shell", "fish"}, &out, &errOut)
 	if code != 0 {
 		t.Errorf("run(completion --shell fish): code=%d; want 0", code)
 	}
@@ -3051,7 +3051,7 @@ func TestRunCompletionFishScript(t *testing.T) {
 // stderr mentions the offending value.
 func TestRunCompletionUnsupportedShell(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := run([]string{"completion", "--shell", "tcsh"}, &out, &errOut)
+	code := run([]string{"--completions", "--shell", "tcsh"}, &out, &errOut)
 	if code != 2 {
 		t.Errorf("run(completion --shell tcsh): code=%d; want 2", code)
 	}
@@ -3071,7 +3071,7 @@ func TestRunCompletionUndetectableShell(t *testing.T) {
 	t.Setenv("SKILLDOZER_SHELL", "")
 	t.Setenv("SHELL", "")
 	var out, errOut bytes.Buffer
-	code := run([]string{"completion"}, &out, &errOut)
+	code := run([]string{"--completions"}, &out, &errOut)
 	if code != 1 {
 		t.Errorf("run(completion, no shell): code=%d; want 1", code)
 	}
@@ -3088,7 +3088,7 @@ func TestRunCompletionUndetectableShell(t *testing.T) {
 func TestRunCompletionEnvShellDetected(t *testing.T) {
 	t.Setenv("SKILLDOZER_SHELL", "zsh")
 	var out, errOut bytes.Buffer
-	code := run([]string{"completion"}, &out, &errOut)
+	code := run([]string{"--completions"}, &out, &errOut)
 	if code != 0 {
 		t.Errorf("run(completion, SKILLDOZER_SHELL=zsh): code=%d; want 0", code)
 	}
@@ -3104,7 +3104,7 @@ func TestRunCompletionLoginShellDetected(t *testing.T) {
 	t.Setenv("SKILLDOZER_SHELL", "")
 	t.Setenv("SHELL", "/bin/zsh")
 	var out, errOut bytes.Buffer
-	code := run([]string{"completion"}, &out, &errOut)
+	code := run([]string{"--completions"}, &out, &errOut)
 	if code != 0 {
 		t.Errorf("run(completion, SHELL=/bin/zsh): code=%d; want 0", code)
 	}

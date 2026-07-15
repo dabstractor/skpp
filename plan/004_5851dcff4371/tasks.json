@@ -90,7 +90,7 @@
               "type": "Task",
               "id": "P1.M1.T3",
               "title": "Update main_test.go to the --flag contract",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Flip every test that passes a bare check/init/completion token expecting a mode to instead pass --check/--init/--completions. Update all error-message assertions to reference --flags. Add new tests for namespace safety (bare words now land in c.tags). After T3, go test ./... is fully green.",
               "subtasks": [
                 {
@@ -117,7 +117,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T3.S2",
                   "title": "Flip run-level dispatch + completion tests + help-text assertions",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T3.S1"
@@ -155,7 +155,7 @@
                   "type": "Subtask",
                   "id": "P1.M2.T1.S1",
                   "title": "Rewrite completions/skilldozer.bash (skills-first, long-form-only)",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 2,
                   "dependencies": [
                     "P1.M1.T1.S1"

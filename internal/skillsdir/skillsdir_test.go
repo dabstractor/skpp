@@ -523,11 +523,11 @@ func TestFindAllMissReturnsErrNotFound(t *testing.T) {
 }
 
 // ErrNotFound message carries the user-facing one-line fix (PRD §8.4 / §6.4):
-// exactly 'skilldozer is not configured; run "skilldozer init"' (with literal
+// exactly 'skilldozer is not configured; run "skilldozer --init"' (with literal
 // backticks around the command, verified by the Level 4 od-c gate).
 func TestErrNotFoundMessageHasFix(t *testing.T) {
 	msg := ErrNotFound.Error()
-	for _, want := range []string{"run", "skilldozer init"} {
+	for _, want := range []string{"run", "skilldozer --init"} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("ErrNotFound message %q missing substring %q", msg, want)
 		}
