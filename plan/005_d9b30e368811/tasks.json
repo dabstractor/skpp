@@ -18,7 +18,7 @@
               "type": "Task",
               "id": "P1.M1.T1",
               "title": "bash + zsh emitted scripts set the list-ambiguous-matches option",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Add the active option-setting line + a disclosure comment + a commented opt-out to the two shells that need it. bash: edit the on-disk file completions/skilldozer.bash (which is //go:embed-ded AND emitted verbatim by runCompletion, so one edit covers both the §14.5 source path and the §14.6 eval path). zsh: edit the zshEvalRegistration const in main.go (the eval-time append produced by zshEvalScript), leaving the on-disk autoload file and the completionScript byte-identity lock untouched. fish needs NO change (lists by default).",
               "subtasks": [
                 {
@@ -41,7 +41,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T1.S2",
                   "title": "zsh: add NO_LIST_AMBIGUOUS to the derived eval registration",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 1,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: See plan/005_d9b30e368811/architecture/code_change_map.md Touch point 2. The zshEvalRegistration raw-string const is at main.go:1260. It is appended by zshEvalScript (main.go:1244) to form the DERIVED eval output; runCompletion (main.go:1499) emits this derived wrapper for zsh only (bash/fish stay verbatim). completionScript (main.go:1215) still returns the on-disk autoload file completions/_skilldozer VERBATIM — do NOT touch completionScript or completions/_skilldozer for the required fix. The const currently contains a disclosure comment + `autoload -Uz compinit` / guarded `compinit` / `compdef _skilldozer skilldozer`.\n2. INPUT: main.go with the working zshEvalRegistration const + zshEvalScript + runCompletion (session 004 green baseline).\n3. LOGIC: Inside the zshEvalRegistration const (before or after the compdef block), add:\n   (a) a DISCLOSURE COMMENT stating: §14.7 lists ambiguous matches on the FIRST tab; this is a SESSION-GLOBAL zsh option (default LIST_AMBIGUOUS is ON, which completes the common prefix and lists only at the exact ambiguous point); NO_LIST_AMBIGUOUS + the default AUTO_LIST lists all prefix matches at once; it changes listing for every command in this shell, not just skilldozer; to restore stock behavior run `setopt LIST_AMBIGUOUS`.\n   (b) an ACTIVE line: `setopt NO_LIST_AMBIGUOUS`.\n   Keep the const a valid Go raw string literal — NO BACKTICKS inside (the existing const already observes this; use single-line or line-continued shell syntax, never a backtick).\n   Broaden the zshEvalRegistration doc comment (main.go:1257) to mention it now also sets the §14.7 listing option (not just compdef). Broaden zshEvalScript / runCompletion doc comments ONLY if they claim the registration is solely about compdef — do not over-edit.\n   OPTIONAL (may skip): zsh manual (fpath) path parity — add `setopt NO_LIST_AMBIGUOUS` as the first line of the _skilldozer() function body in completions/_skilldozer. If pursued, completionScript('zsh') MUST remain byte-identical to that file (the edit must not depend on the derivation). SIMPLEST: leave completions/_skilldozer alone.\n4. OUTPUT: `eval \"$(skilldozer --completions)\"` (zsh) now sets NO_LIST_AMBIGUOUS at eval time. `go build ./...` succeeds. completionScript('zsh') is still byte-identical to completions/_skilldozer (the const is appended AFTER completionScript returns; the byte-identity lock is untouched). After rebuild, `./skilldozer --completions --shell zsh` output contains `setopt NO_LIST_AMBIGUOUS` and the opt-out token `setopt LIST_AMBIGUOUS`.\n5. DOCS: [Mode A] The disclosure comment inside the const IS the §14.7 'disclose in the emitted script's comments' requirement for zsh. The broadened doc comment on zshEvalRegistration is the developer-facing reference. No separate per-feature doc step.",
@@ -60,14 +60,14 @@
               "type": "Task",
               "id": "P1.M1.T2",
               "title": "Tests locking the emitted-byte contract",
-              "status": "Planned",
+              "status": "Researching",
               "description": "There is no in-process way to drive a live shell's first-Tab behavior from the skilldozer binary, so §13 acceptance gains no new in-process assertions. Instead, lock the §14.7 contract with BYTE-LEVEL assertions on the emitted scripts: does the bash/zsh output CONTAIN the active option line AND the disclosed opt-out token? Mirror the existing TestZshEvalScript* / TestRunCompletion*Script pattern. TestEmbeddedCompletionsMatchOnDisk must remain green (do not weaken it).",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M1.T2.S1",
                   "title": "Assert bash + zsh emitted output carry the option + opt-out",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 1,
                   "dependencies": [
                     "P1.M1.T1.S1",

@@ -1237,9 +1237,10 @@ func completionScript(shell string) (string, bool) {
 //     .zshrc, before compsys is guaranteed loaded, hitting _arguments at line 31 →
 //     `_skilldozer:31: command not found: _arguments`.
 //
-// So we strip the self-call and append an explicit compdef registration plus a compinit
-// bootstrap that is a no-op once compsys is already loaded (oh-my-zsh / prezto / a manual
-// `autoload -U compinit && compinit` all define compdef). completionScript keeps returning
+// So we strip the self-call and append an explicit compdef registration, a compinit
+// bootstrap, and the §14.7 NO_LIST_AMBIGUOUS listing option — all no-ops once compsys is
+// already loaded (oh-my-zsh / prezto / a manual `autoload -U compinit && compinit` all
+// define compdef). completionScript keeps returning
 // the verbatim bytes (the §14.6 byte-identity lock); this derivation lives in runCompletion.
 func zshEvalScript(raw string) string {
 	// The autoload file ends with:   ...esac\n}\n\n_skilldozer "$@"\n
@@ -1255,8 +1256,9 @@ func zshEvalScript(raw string) string {
 }
 
 // zshEvalRegistration is appended to the stripped autoload body to make it eval-safe. Its own
-// const so a test can lock the exact registration contract (compdef binding + the no-op-when-
-// loaded compinit bootstrap). No backticks inside: it is a Go raw string literal.
+// const so a test can lock the exact registration contract: the compdef binding, the no-op-when-
+// loaded compinit bootstrap, AND the §14.7 listing option (setopt NO_LIST_AMBIGUOUS + the
+// commented setopt LIST_AMBIGUOUS opt-out). No backticks inside: it is a Go raw string literal.
 const zshEvalRegistration = `
 # Register the completion for eval. The #compdef header above only binds this as an
 # autoload file on fpath; under eval it is inert, so bind the function explicitly.
@@ -1267,6 +1269,27 @@ const zshEvalRegistration = `
 autoload -Uz compinit
 (( $+functions[compdef] )) || compinit
 (( $+functions[compdef] )) && compdef _skilldozer skilldozer
+
+# --- §14.7 listing behavior (decision 22) ------------------------------------
+# skilldozer wants every ambiguous match listed on the FIRST Tab. A manifest-free
+# store (PRD §2) makes completion the primary discovery path, so candidates hidden
+# behind a silent common-prefix halt are a UX defect. zsh defaults to LIST_AMBIGUOUS
+# ON: the first Tab completes the common prefix and lists only once you have typed
+# to the exact ambiguous point (e.g. ag<tab> -> agent-b, nothing shown).
+#
+# setopt NO_LIST_AMBIGUOUS (with the default AUTO_LIST) makes the first Tab list ALL
+# prefix matches immediately (verified empirically: it flips ag<tab> from no-list to
+# showing both agent-browser and agent-builder). This is a SESSION-GLOBAL zsh option:
+# it changes listing for EVERY command in this shell, not just skilldozer (there is
+# no per-command scope — a scoped zstyle ':completion:*:*:_skilldozer:*' menu select
+# does NOT list on the first Tab; only the global NO_LIST_AMBIGUOUS does).
+#
+# Unlike bash's bind (which warns when sourced non-interactively), zsh setopt is a
+# builtin that is silent in any context, so this line needs NO interactivity guard.
+#
+# Opt-out — restore zsh's stock (exact-ambiguous-point) listing:
+#   setopt LIST_AMBIGUOUS
+setopt NO_LIST_AMBIGUOUS
 `
 
 // runInit is the `skilldozer --init` orchestrator (PRD §8.2). run()'s dispatch calls it
