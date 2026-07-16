@@ -117,6 +117,7 @@ Binary name: **`skilldozer`**. **Every action that is not a skill tag is a `--fl
 | `skilldozer --search <q>` / `-s <q>` | Substring (case-insensitive) search over tag, frontmatter `name`, `description`, and `metadata.keywords`. | Same table format as `--list`, filtered. | `0`; `1` if no matches |
 | `skilldozer --check` | Validate every skill on disk (see §9). | Report: `OK` lines + any `WARN`/`ERROR` lines. | `0` if clean; `1` if any ERROR |
 | `skilldozer --init [<dir>]` | First-run setup (see §8.2): prompt for the skills store dir, create it if missing, write the config, seed a template if empty, validate. Non-interactive: `skilldozer --init <dir>` or `skilldozer --init --store <dir>`. | The configured store path. | `0` on success; `1` on error/cancel |
+| `skilldozer --link <dir>` | Link an external skill directory into the store (see §8.4): absolutize `<dir>`, validate it is a directory containing at least one `SKILL.md`, then create a symlink `<store>/<basename>` → `<dir>`. An existing symlink at that name is refreshed; a non-symlink (real file/dir) is refused. | The created (or refreshed) symlink path, `<store>/<name>`. | `0` on success; `1` on validation/conflict/store error; `2` if `<dir>` is omitted |
 | `skilldozer --completions [--shell <name>]` | Emit the completion script for the current (or named) shell to **stdout**, for `eval "$(skilldozer --completions)"`. See §14.6. | The shell's completion script (one text blob). | `0`; `1` if shell undetectable; `2` if `--shell` value unsupported |
 | `skilldozer --path` / `-p` | Where is `skilldozer` looking? | Absolute path of the resolved skills dir. | `0` (`1` if unresolvable) |
 | `skilldozer --help` / `-h` | Usage. | Help text (to stdout). | `0` |
@@ -134,7 +135,7 @@ Binary name: **`skilldozer`**. **Every action that is not a skill tag is a `--fl
 
 - **No arguments and no flag** ⇒ print usage to **stdout**, exit `0`. Bare invocation is **implicit `--help`** (skilldozer has no default action), chosen so `skilldozer | grep …` works — the help must land on the piped stream to be grep-friendly. (`skilldozer --help` / `-h` likewise prints usage to stdout, exit 0.) *(Previously stderr/exit-1 “parity with `get-server-config.sh`”; overridden — §19, decision 17.)*
 - `--help` / `--version` take precedence over everything else.
-- The **mode flags** (`--check`, `--init`, `--list`, `--search`, `--all`, `--completions`, `--path`) are mutually exclusive with each other and with tag resolution: mixing a `<tag>` with any of them is an error (exit 2). `--init` is the sole mode that also accepts a positional `<dir>` (the store to adopt); every *other* positional is a skill tag.
+- The **mode flags** (`--check`, `--init`, `--link`, `--list`, `--search`, `--all`, `--completions`, `--path`) are mutually exclusive with each other and with tag resolution: mixing a `<tag>` with any of them is an error (exit 2). `--init` is the sole mode that also accepts a positional `<dir>` (the store to adopt); every *other* positional is a skill tag. (`--link <dir>` takes its directory as the **flag value** — the token after `--link` — like `--store`/`--search`, NOT as a positional, so the bare-positional namespace stays reserved for tags.)
 - **There are no bare-word subcommands.** Because everything that is not a tag is a `--flag`, a skill literally tagged `check`, `init`, or `completions` resolves normally — `skilldozer check` resolves the *tag* `check`, `skilldozer --check` runs validation. This is the namespace-safety guarantee that lets a bare `<tab>` always mean "skills" (§14).
 
 ### 6.4 Error semantics (critical for `$(...)` use)
@@ -145,6 +146,7 @@ Binary name: **`skilldozer`**. **Every action that is not a skill tag is a `--fl
 - Ambiguous tag (a short name matching >1 skill) ⇒ stderr lists the candidate full tags, exit `1`.
 - Skills dir cannot be located / skilldozer is unconfigured ⇒ stderr: `skilldozer is not configured; run \`skilldozer --init\`` (or, if configured but the dir vanished, the concise reason + fix), exit `1`. Bare tag resolution **never** prompts (see §8.2), so `pi --skill "$(skilldozer x)"` fails loudly instead of hanging inside command substitution.
 - `skilldozer --completions` cannot determine the shell (no `--shell`, no `$SKILLDOZER_SHELL`, no usable `$SHELL`) ⇒ stderr: `could not detect shell; pass --shell {bash\|zsh\|fish}`, exit `1`. An unsupported `--shell <name>` value (not bash/zsh/fish) ⇒ stderr error, exit `2`. On success the script goes to **stdout** (for `eval`); nothing else.
+- `skilldozer --link <dir>` (§8.4): `<dir>` missing, not a directory, the store itself/inside it, or contains no `SKILL.md` ⇒ stderr message, **nothing on stdout**, exit `1`. A name collision at `<store>/<name>` with a non-symlink (real file or directory) is refused ⇒ stderr message, exit `1`. `--link` presented with no following value ⇒ `--link requires a path to a skill directory`, exit `2`.
 
 ---
 
@@ -231,6 +233,36 @@ Non-interactive: `skilldozer --init <dir>` or `skilldozer --init --store <dir>` 
 5. **None** ⇒ unconfigured: stderr one-line fix (`run \`skilldozer --init\``), exit `1`.
 
 `skilldozer --path` reports which rule won, on stderr, with one of the labels: `SKILLDOZER_SKILLS_DIR`, `config file`, `sibling of binary`, `ancestor of cwd`. This matters because a bad `SKILLDOZER_SKILLS_DIR` value is silently ignored and falls through — `--path` is the only way to tell which directory actually won. This remains the single most failure-prone area — implement and test it first (see §13 acceptance).
+
+### 8.4 Linking an external skill — `skilldozer --link <dir>`
+
+`--link` makes an external skill directory available in the store **without copying it** — the `npm link` / `pip install -e` idiom for skills. It relies on discovery following symlinks (§7.1: "a skill reachable only through a symlink is discovered and reported under its on-disk link name"), so a linked skill resolves by its link name exactly like a real one.
+
+Behavior:
+
+1. Resolve the store via §8.3 (`skillsdir.Find()`). Unconfigured ⇒ stderr hint, exit `1`.
+2. Absolutize `<dir>` (expand `~`/`~/`, then `filepath.Abs`) so the symlink target is stable regardless of cwd when discovery later follows it.
+3. Validate `<dir>`:
+   - Must be an existing directory (else stderr message, exit `1`).
+   - Must not be the store itself or live inside it — linking the store into itself is a no-op/footgun (else exit `1`).
+   - Must contain at least one `SKILL.md` at any depth (`HasSkillMD`) — a single skill OR a directory of skills (else exit `1`).
+4. Link name = `filepath.Base(<dir>)`; link path = `<store>/<name>`.
+5. Conflict handling at the link path:
+   - Nothing exists ⇒ create the symlink.
+   - An existing **symlink** ⇒ **refresh** (remove + recreate), matching the `install.sh` precedent (§12.1 step 5: "If a symlink already exists, refresh it"). A symlink is a pointer the user manages; re-pointing it is not data loss.
+   - A non-symlink (regular file or real directory) ⇒ **refuse** with a clear message (exit `1`); the user must remove it manually. This protects real data (the §17 "never clobber" spirit, applied to `--link`).
+6. On success: stdout = the link path (`<store>/<name>`); stderr = a `Linked <linkPath> -> <absTarget>` confirmation plus which §8.3 store rule won. Exit `0`.
+
+`--link` is a mode (mutually exclusive with all other modes and with tags, §6.3). Its directory argument is a **flag value** (the token after `--link`), not a positional — so the bare-positional namespace stays reserved for skill tags (§6.1). `--link=<dir>` is the `=`-form; `--link` with no following value ⇒ exit `2`. No short form is advertised (matching `--store`/`--init`/`--check`/`--completions`).
+
+Example:
+
+```bash
+# Develop a skill elsewhere, link it into the store (no copy, single source of truth)
+skilldozer --link ~/projects/agent-browser
+skilldozer agent-browser          # now resolves via the symlink
+pi --skill "$(skilldozer agent-browser)"
+```
 
 ---
 
@@ -409,6 +441,18 @@ grep -q 'store: /tmp/skilldozer-store' /tmp/skilldozer-iso/cfg.yaml             
 SKILLDOZER_CONFIG=/tmp/skilldozer-iso/cfg.yaml ./skilldozer --path | grep -q /tmp/skilldozer-store
 SKILLDOZER_SKILLS_DIR=/tmp/skilldozer-store SKILLDOZER_CONFIG=/tmp/skilldozer-iso/cfg.yaml ./skilldozer --path 2>&1 | grep -q SKILLDOZER_SKILLS_DIR
 cd - >/dev/null
+
+# --link: symlink an external skill dir into the store (§8.4)
+rm -rf /tmp/sd-link && mkdir -p /tmp/sd-link/store /tmp/sd-link/src/linked
+printf -- '---\nname: linked\ndescription: A linked skill.\n---\n# body\n' > /tmp/sd-link/src/linked/SKILL.md
+test "$(SKILLDOZER_SKILLS_DIR=/tmp/sd-link/store ./skilldozer --link /tmp/sd-link/src/linked)" = "/tmp/sd-link/store/linked" && echo "link OK"
+test -L /tmp/sd-link/store/linked                                                              # symlink created
+SKILLDOZER_SKILLS_DIR=/tmp/sd-link/store ./skilldozer linked >/dev/null && echo "resolve-linked OK"   # resolves via the symlink
+SKILLDOZER_SKILLS_DIR=/tmp/sd-link/store ./skilldozer --link /tmp/sd-link/src/linked >/dev/null && echo "link-refresh OK"   # re-link refreshes the symlink
+mkdir -p /tmp/sd-link/notaskill                                                                  # dir with no SKILL.md → refused
+out=$(SKILLDOZER_SKILLS_DIR=/tmp/sd-link/store ./skilldozer --link /tmp/sd-link/notaskill 2>/dev/null); rc=$?
+[ -z "$out" ] && [ "$rc" = "1" ] && echo "link-non-skill-refused OK"
+./skilldozer --link >/dev/null 2>&1; [ "$?" = "2" ] && echo "link-missing-value OK"               # no value → exit 2
 ```
 
 All of the above must pass. The pi line must show the skill loaded with **`--no-skills`** (proving we rely solely on the explicit `--skill` path, never on auto-discovery).
@@ -441,6 +485,7 @@ The **headline behavior** is: a bare `<tab>` shows the user's installed **skills
 | `skilldozer -<tab>` or `--<tab>` | **Long-form flags only** | static set (§6.1/§6.2) |
 | `skilldozer --c<tab>` | `--check`, `--completions` | flags filtered to the `--c` prefix |
 | `skilldozer --init <tab>` | Directories (file completion) | shell-native, like `--store` |
+| `skilldozer --link <tab>` | Directories (the skill dir to link in) | shell-native, like `--store`/`--init` |
 | `skilldozer --store <tab>` | Directories | shell-native |
 | `skilldozer --search <tab>` | Nothing | (free-text query) |
 
@@ -460,6 +505,7 @@ The value-taking flags are treated as **intentional inverses**:
 - `--search`/`-s` — free-text query → offer **nothing** (offering tags here would be wrong).
 - `--store <dir>` (§8.2) — a directory value → offer **file/dir completion**.
 - `--init [<dir>]` (§8.2) — optional directory → offer **file/dir completion** (the store to adopt).
+- `--link <dir>` (§8.4) — a directory value → offer **file/dir completion** (the skill dir to link in).
 - `--completions --shell <name>` — `--shell` takes a fixed enum (`bash`/`zsh`/`fish`); offer those three words, nothing else.
 
 ### 14.3 Robustness
@@ -519,7 +565,7 @@ From then on, in every new shell, `skilldozer <tab>` is alive. The highest-prior
 | `skilldozer <tab>` | The full list of installed skill tags (the default, most-used action). |
 | `skilldozer a<tab>` | Only skills whose tag starts with `a`. |
 | `skilldozer writing/<tab>` | Only skills nested under `writing/`. |
-| `skilldozer -<tab>` | The **long-form flags** (`--all`, `--check`, `--completions`, `--file`, `--help`, `--init`, `--list`, `--no-color`, `--path`, `--relative`, `--search`, `--store`, `--version`), narrowed by what you type after the dash. |
+| `skilldozer -<tab>` | The **long-form flags** (`--all`, `--check`, `--completions`, `--file`, `--help`, `--init`, `--link`, `--list`, `--no-color`, `--path`, `--relative`, `--search`, `--store`, `--version`), narrowed by what you type after the dash. |
 | `skilldozer --c<tab>` | `--check`, `--completions`. |
 | `skilldozer --init <tab>` | Directories (you're picking the store to adopt). |
 | `skilldozer --store <tab>` | Directories. |
@@ -633,3 +679,4 @@ Mirror the mcpeepants README's tone and structure:
 | 18 | `--completions` delivery | **Emit script to stdout for `eval`** (`eval "$(skilldozer --completions)"`); scripts `//go:embed`-ded into the binary; **no** rc/file writes; `--shell` overrides `$SKILLDOZER_SHELL`/`$SHELL` detection | A child process cannot register completions in the parent shell — only the shell can, by eval'ing the script in its own process (idiom: `zoxide init`/`starship init`/`direnv hook`). Emitting keeps the binary side-effect-free (§14.5). Embedding makes it work for `go install` users with no clone (decision 9). `--install` (write rc) deferred — would revisit §14.5. |
 | 19 | Subcommand → flag (namespace safety) | **No bare-word subcommands.** `check`/`init`/`completion` are now `--check`/`--init`/`--completions`; `completion` also renamed to the plural `--completions` | The bare positional namespace is reserved entirely for skill tags, so a skill named `check`/`init`/`completions` is never shadowed and a bare `<tab>` unambiguously means "skills" (§6.1, §14). Previously handled by "reserved subcommand shadows the tag," which was itself the namespace conflict. |
 | 20 | Completions behavior | **Skills-first & long-form-only:** bare `<tab>` lists skills; `skilldozer -<tab>` lists `--long` flags (never short aliases); prefix filtering is the shell's native job | `<tab>` = skills is the headline UX the user asked for. Driving everything to `--flags` (decision 19) makes it trivially correct. Long-form-only matches the `--help` surface and keeps the menu short. |
+| 21 | `--link` (external skill linking) | **`skilldozer --link <dir>`** creates a symlink `<store>/<basename>` → absolutized `<dir>`; refreshes an existing symlink (install.sh precedent), refuses a non-symlink (never clobber); validates the target is a dir with ≥1 `SKILL.md`, not the store itself/inside it; `<dir>` is a flag value (not a positional); stdout = link path, exit `0`/`1`, exit `2` on missing value | The `npm link`/`pip install -e` idiom for skills — develop elsewhere, link into the store, discover via §7.1's symlink-following (no new discovery code). Avoids copying, giving a single source of truth for in-development skills. |

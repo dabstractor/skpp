@@ -34,6 +34,9 @@ complete -c skilldozer -l check       -d 'Validate every skill on disk'
 # --init <dir> (§8.2): like --store, its value is a directory; `-r` routes
 # the value slot to file/dir completion (the inverse of --search's nothing).
 complete -c skilldozer -l init        -d 'First-run setup: pick/create the skills store' -r
+# --link <dir> (§8.4): like --store/--init, its value is a directory; `-r` routes
+# the value slot to file/dir completion (the external skill dir to link in).
+complete -c skilldozer -l link        -d 'Link an external skill directory into the store' -r
 complete -c skilldozer -l completions -d 'Emit the shell completion script for eval'
 # --search takes a free-text query, so NO completion is offered after it.
 # We deliberately do NOT pass -r here: in fish 4.x `-r` switches into
@@ -48,7 +51,8 @@ complete -c skilldozer -l search -d 'Substring search over tag/name/description/
 # --store's value is a DIRECTORY, so here we DO pass `-r`: in fish 4.x `-r`
 # switches into "complete the option's value" mode, which BYPASSES the global
 # `-f` above and offers file/dir paths for the value. This is the intentional
-# INVERSE of --search's no-`-r` (free-text -> offer nothing). No short form.
+# INVERSE of --search's no-`-r` (free-text -> offer nothing). --link (§8.4) above
+# uses the same `-r` pattern for the same reason. No short form.
 complete -c skilldozer -l store -d 'Non-interactive store path for init' -r
 # --shell <name> (PRD §14.2): Force a shell for completion. The value is a FIXED
 # enum (bash/zsh/fish), so use `-x` (exclusive: require a value, NO file

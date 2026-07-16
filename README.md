@@ -124,6 +124,9 @@ skilldozer --all
 # Validate every skill on disk
 skilldozer --check
 
+# Link an external skill directory into the store (no copy; npm-link style, §8.4)
+skilldozer --link ~/projects/agent-browser   # creates <store>/agent-browser -> that dir
+
 # Where is the resolved skills directory? (its discovery rule prints to stderr)
 skilldozer --path                        # → /…/skills (stderr: found via sibling of binary)
 
@@ -146,11 +149,33 @@ multiple tags are given, any unresolved tag causes nothing to be printed and
 exit 1, so `pi` never sees a partial result. The `--path`, `--list`, `--search`,
 and `--all` modes are mutually exclusive — combining any two exits 2, as does
 combining a tag with any of them (a tag resolves one path; those modes inspect
-the whole store). The flags that take a value — `--store`, `--search`, and
-`--shell` — all exit 2 when given as the last token with nothing after them,
-rather than guessing a value.
+the whole store). `--link` is another such mode. The flags that take a value —
+`--store`, `--search`, `--shell`, and `--link` — all exit 2 when given as the
+last token with nothing after them, rather than guessing a value.
 
 `skilldozer --help` lists every flag.
+
+### Linking skills from elsewhere (`--link`)
+
+`skilldozer --link <dir>` makes a skill directory that lives **outside** the
+store available in it, **without copying** — the `npm link` / `pip install -e`
+idiom for skills. You point it at any directory containing a `SKILL.md` (or a
+directory of skills), and it creates a symlink `<store>/<basename>` → that
+directory. Discovery already follows symlinks, so the linked skill resolves by
+its name exactly like a real one:
+
+```bash
+skilldozer --link ~/projects/agent-browser
+skilldozer agent-browser          # now resolves (via the symlink)
+pi --skill "$(skilldozer agent-browser)"
+```
+
+`~` is expanded and the target is absolutized, so the link stays valid from any
+working directory. Re-running `--link` on the same name **refreshes** an existing
+symlink (re-points it); it **refuses** to overwrite a real file or directory at
+that name (remove it yourself first). It also refuses a target that isn't a
+directory, contains no `SKILL.md`, or is the store itself. The store must already
+be configured (`skilldozer --init`).
 
 ## Where skills live
 
@@ -294,14 +319,14 @@ Once loaded, completions are **skills-first and long-form-only**:
   `skilldozer --relative --all` on every keystroke, so a newly-dropped skill is
   completable immediately.
 - `skilldozer -<tab>` lists the **long-form flags only** — `--all`, `--check`,
-  `--completions`, `--file`, `--help`, `--init`, `--list`, `--no-color`,
+  `--completions`, `--file`, `--help`, `--init`, `--link`, `--list`, `--no-color`,
   `--path`, `--relative`, `--search`, `--shell`, `--store`, `--version` — narrowed
   by what you type after the dash. Short aliases (`-a`, `-l`, …) stay valid for
   typing but are deliberately not advertised.
-- `skilldozer --init <tab>` and `skilldozer --store <tab>` offer directories
-  (the store to adopt); `skilldozer --search <tab>` offers nothing (free-text);
-  `skilldozer --shell <tab>` offers the three supported shells — `bash`, `zsh`,
-  and `fish`.
+- `skilldozer --init <tab>`, `skilldozer --link <tab>`, and `skilldozer --store <tab>`
+  offer directories (a path value); `skilldozer --search <tab>` offers nothing
+  (free-text); `skilldozer --shell <tab>` offers the three supported shells —
+  `bash`, `zsh`, and `fish`.
 
 This works because every action that is not a skill tag is a `--flag` —
 `--check`, `--init`, and `--completions` are flags, not bare subcommands — so the

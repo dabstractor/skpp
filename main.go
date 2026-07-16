@@ -79,6 +79,7 @@ USAGE:
   skilldozer --search <query>
   skilldozer --check
   skilldozer --init [<dir>]
+  skilldozer --link <dir>
   skilldozer --completions [--shell <name>]
   skilldozer --path
   skilldozer --help
@@ -94,6 +95,7 @@ EXAMPLES:
   skilldozer --search reddit         # substring search over tag/name/description/keywords/aliases/category
   skilldozer --check                   # validate every skill on disk
   skilldozer --init --store <dir>      # non-interactive first-run setup
+  skilldozer --link ~/skills/my-tool   # link an external skill dir into the store (§8.4)
   eval "$(skilldozer --completions)"   # load completions into your shell
 
 Help and --completions advertise long forms only; short aliases (-a, -l, -s, -f, -p, -h, -v)
@@ -106,6 +108,7 @@ OPTIONS:
   --search <q>, -s             Substring search over tag / name / description / keywords / aliases / category
   --check                      Validate every skill on disk (report OK / WARN / ERROR)
   --init [<dir>]               First-run setup: pick/create the skills store and write the config
+  --link <dir>                 Link an external skill directory into the store (creates <store>/<name> symlink)
   --store <dir>                Non-interactive store path for init
   --completions [--shell <name>]   Emit the shell completion script for eval (§14.6)
   --shell <bash|zsh|fish>      Force a shell for completion (else auto-detect)
@@ -170,6 +173,9 @@ type config struct {
 	shellMissingValue  bool     // --shell seen with NO following value (Issue 3); run() exits 2 with "--shell requires a value (bash|zsh|fish)". NOT set by --shell= (D5).
 	completion         bool     // `skilldozer --completions` flag (PRD §14.6); exclusive like check/init; also set by `--shell <name>` (which implies completion)
 	completionShell    string   // `--shell <bash|zsh|fish>` value (PRD §14.6); "" ⇒ detect from $SKILLDOZER_SHELL/$SHELL (P1.M2.T2.S2)
+	link               bool     // `skilldozer --link <dir>` flag (PRD §8.4): link an external skill dir into the store via symlink; exclusive mode like check/init
+	linkTarget         string   // `--link <dir>` value (the skill dir to link); captured from the token after --link or the =-form (PRD §8.4)
+	linkMissingValue   bool     // --link / --link= seen with NO value; run() rejects with exit 2 (mirrors storeMissingValue, Issue 2)
 	tags               []string // positional <tag> args (PRD §6.1 `skilldozer <tag> [<tag>...]`); resolved in run
 	unknownFlag        string   // first unknown dashed token, "" if none (§6 header → exit 2)
 }
@@ -256,6 +262,15 @@ func parseArgs(args []string) config {
 				c.initStore = val
 				if val == "" {
 					c.storeMissingValue = true
+				}
+			case "--link":
+				// `--link=<dir>`: the skill directory to link into the store (PRD §8.4). Mirrors --store='s
+				// '='-form. Empty value (--link=) records linkMissingValue so run() rejects with exit 2
+				// (a link with no target is meaningless). No short form.
+				c.link = true
+				c.linkTarget = val
+				if val == "" {
+					c.linkMissingValue = true
 				}
 			case "--check":
 				c.check = true
@@ -366,6 +381,20 @@ func parseArgs(args []string) config {
 					c.initStore = next
 					i++
 				}
+			}
+		case "--link":
+			// `skilldozer --link <dir>` (PRD §8.4): link an external skill dir into the store. Mirrors
+			// --store's next-token capture — the dir is a FLAG VALUE (the token after --link), NOT a
+			// positional, so the bare-positional namespace stays reserved for tags (§6.3). No short
+			// form. If --link is the LAST token (no value follows), record linkMissingValue so run()
+			// exits 2 with "--link requires a path to a skill directory" (mirrors --store/--search,
+			// Issue 3, D4). link stays false on the no-value path (no value consumed).
+			if i+1 < len(args) {
+				c.link = true
+				c.linkTarget = args[i+1]
+				i++
+			} else {
+				c.linkMissingValue = true
 			}
 		default:
 			// Positional <tag> (PRD §6.1 `skilldozer <tag> [<tag>...]`): a token that
@@ -540,6 +569,14 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "skilldozer: --shell requires a value (bash|zsh|fish)")
 		return 2
 	}
+	// --link presented without its value → exit 2 (PRD §8.4). Same value-taking-flag rule as
+	// --store/--search/--shell above (Issue 3, D4): a missing value is a parse error, not a
+	// silent fall-through. stdout stays EMPTY (§6.4 discipline). The signal is set by parseArgs
+	// in BOTH --link no-value branches (next-token and '='-form).
+	if c.linkMissingValue {
+		fmt.Fprintln(stderr, "skilldozer: --link requires a path to a skill directory")
+		return 2
+	}
 
 	// 4) Mode mutual exclusivity → exit 2 (PRD §6.3). Checked AFTER unknown-flag
 	//    so `--bogus foo --list` reports the unknown flag first (both exit 2; the
@@ -570,6 +607,17 @@ func run(args []string, stdout, stderr io.Writer) int {
 	// (unsupported value) with nothing on stdout (PRD §6.4).
 	if c.completion {
 		return runCompletion(c, stdout, stderr)
+	}
+
+	// link dispatch (PRD §8.4). link is an exclusive mode (like check/init/completion):
+	// exclusivityError above guarantees no other mode is set and no tags are present when
+	// c.link is true, so this self-contained branch returns before the path/list/search/
+	// check/all/tags ladder below. runLink resolves the store (§8.3), absolutizes + validates
+	// the target skill dir, then creates (or refreshes) a <store>/<basename> symlink → target.
+	// Exit 0 on success (stdout = link path); 1 on validation/conflict/store error (empty
+	// stdout); the missing-value case is handled above as exit 2.
+	if c.link {
+		return runLink(c, stdout, stderr)
 	}
 
 	// 5) Normal mode dispatch (order: path → list → search → check → all →
@@ -856,6 +904,20 @@ func exclusivityError(c config) (bad bool, msg string) {
 		}
 		if c.check || c.init || c.list || c.searchMode || c.all || c.path {
 			return true, "skilldozer: '--completions' cannot be combined with --check/--init/--path/--list/--search/--all"
+		}
+	}
+	// --link is its own exclusive mode (PRD §6.3 / §8.4: like --check/--init/--completions). It
+	// rejects the other mode flags AND stray tags. `--link`'s directory is a FLAG VALUE (consumed
+	// by parseArgs as c.linkTarget), never a positional, so it never lands in c.tags; a stray
+	// positional after --link is rejected here. The init/completion blocks above do NOT need to
+	// check c.link: this block catches any --link combination (it checks c.init/c.completion), so
+	// whichever block runs first reports the conflict.
+	if c.link {
+		if hasTags {
+			return true, "skilldozer: '--link' cannot be combined with tag arguments"
+		}
+		if c.check || c.init || c.completion || c.list || c.searchMode || c.all || c.path {
+			return true, "skilldozer: '--link' cannot be combined with --check/--init/--completions/--path/--list/--search/--all"
 		}
 	}
 	return false, ""
@@ -1289,6 +1351,91 @@ func runInit(c config, stdout, stderr io.Writer) int {
 	}
 	fmt.Fprintf(stderr, "%d skills, %d errors, %d warnings\n", len(skills), rep.Errors, rep.Warnings)
 	return 0 // setup succeeded; check findings do not change init's exit code
+}
+
+// runLink is the `skilldozer --link <dir>` handler (PRD §8.4). run()'s dispatch calls it
+// when c.link is true (link is exclusive, so no other mode is active and no tags are
+// present). It resolves the store via §8.3, absolutizes + validates the target skill
+// directory, then creates (or refreshes) a symlink <store>/<basename> → <target>. Exit 0
+// on success (stdout = the link path); 1 on any validation/conflict/store error (nothing
+// on stdout). The missing-value case (--link with no path) is handled earlier in run()
+// as exit 2, so c.linkTarget is guaranteed non-empty here.
+//
+// This is the npm-link / pip-install -e idiom for skills: develop a skill anywhere on
+// disk, link it into the store, and it is immediately resolvable — no copy, single source
+// of truth. It leans on discovery's existing symlink-following (§7.1: "a skill reachable
+// only through a symlink is discovered and reported under its on-disk link name"), so no
+// new discovery code is involved.
+func runLink(c config, stdout, stderr io.Writer) int {
+	// (1) Resolve the store (must be configured). Unconfigured ⇒ the one-line fix to stderr,
+	//     exit 1 (skillsdir.Find returns ErrNotFound / ErrConfiguredStoreMissing, verbatim).
+	store, src, err := skillsdir.Find()
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	// (2) Absolutize the target: expand a leading "~"/"~/" to $HOME (expandHome) BEFORE
+	//     filepath.Abs (which does not expand "~"), so `--link ~/x` works — mirrors resolveStore.
+	//     An ABSOLUTE target is stored in the symlink so discovery resolves it correctly later
+	//     regardless of cwd (a relative symlink target resolves against the LINK's location,
+	//     which would be fragile here).
+	target := expandHome(c.linkTarget)
+	absTarget, err := filepath.Abs(target)
+	if err != nil {
+		fmt.Fprintf(stderr, "skilldozer --link: absolutize target %q: %v\n", c.linkTarget, err)
+		return 1
+	}
+	// (3a) Must be an existing directory.
+	info, err := os.Stat(absTarget)
+	if err != nil || !info.IsDir() {
+		fmt.Fprintf(stderr, "skilldozer --link: %q is not an existing directory\n", c.linkTarget)
+		return 1
+	}
+	// (3b) Must not be the store itself or inside it — linking the store into itself is a
+	//      no-op/footgun and would create a self-referential / recursive link. Clean paths make
+	//      the equality + prefix comparison exact (both come from filepath.Abs/Clean).
+	storeAbs := filepath.Clean(store)
+	if absTarget == storeAbs || strings.HasPrefix(absTarget, storeAbs+string(filepath.Separator)) {
+		fmt.Fprintf(stderr, "skilldozer --link: %q is already inside the store %q; nothing to link\n", absTarget, store)
+		return 1
+	}
+	// (3c) Must contain at least one SKILL.md at any depth (a single skill OR a directory of
+	//      skills). Linking a dir with no SKILL.md is almost certainly a mistake; refuse clearly
+	//      rather than silently doing nothing useful.
+	if !skillsdir.HasSkillMD(absTarget) {
+		fmt.Fprintf(stderr, "skilldozer --link: %q contains no SKILL.md (not a skill directory)\n", absTarget)
+		return 1
+	}
+	// (4) Link name = basename of the target; link path = <store>/<name>.
+	name := filepath.Base(absTarget)
+	linkPath := filepath.Join(store, name)
+	// (5) Conflict handling at the link path.
+	if li, lerr := os.Lstat(linkPath); lerr == nil {
+		// Something already exists at linkPath.
+		if li.Mode()&os.ModeSymlink == 0 {
+			// Non-symlink (regular file or real directory): refuse to clobber. Protects real
+			// data (PRD §17 "never clobber" spirit). The user must remove it manually.
+			fmt.Fprintf(stderr, "skilldozer --link: %q already exists and is not a symlink; refusing to overwrite (remove it first)\n", linkPath)
+			return 1
+		}
+		// Existing symlink: refresh (remove + recreate). Matches install.sh precedent (§12.1
+		// step 5: "If a symlink already exists, refresh it"). A symlink is a pointer the user
+		// manages; re-pointing it is not data loss.
+		if err := os.Remove(linkPath); err != nil {
+			fmt.Fprintf(stderr, "skilldozer --link: remove existing symlink %q: %v\n", linkPath, err)
+			return 1
+		}
+	}
+	// (6) Create the symlink: linkPath → absTarget.
+	if err := os.Symlink(absTarget, linkPath); err != nil {
+		fmt.Fprintf(stderr, "skilldozer --link: create symlink %q: %v\n", linkPath, err)
+		return 1
+	}
+	// (7) Report: stdout = the link path (scriptable, mirrors --init's stdout=path); stderr =
+	//     a confirmation including the target and which §8.3 store rule won (mirrors --path).
+	fmt.Fprintln(stdout, linkPath)
+	fmt.Fprintf(stderr, "Linked %s -> %s (found via %s)\n", linkPath, absTarget, src)
+	return 0
 }
 
 // loginShellBase returns the lowercased basename of $SHELL — "zsh" for /bin/zsh,

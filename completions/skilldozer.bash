@@ -35,18 +35,19 @@ _skilldozer_completion() {
     # Value-taking flags: route the value slot away from tag completion.
     #   --search        -> free-text query  -> offer NOTHING (return 0 with empty COMPREPLY).
     #   --store/--init  -> directory value  -> complete DIRECTORIES via compgen -d.
+    #   --link          -> directory value  -> complete DIRECTORIES via compgen -d (§8.4).
     #   --shell         -> fixed enum       -> offer "bash zsh fish" via compgen -W.
-    # (--store/--init WANT path completion, unlike --search's free-text -> nothing.)
+    # (--store/--init/--link WANT path completion, unlike --search's free-text -> nothing.)
     case "$prev" in
         --search) return 0 ;;
-        --store|--init) COMPREPLY=($(compgen -d -- "$cur")); return 0 ;;
+        --store|--init|--link) COMPREPLY=($(compgen -d -- "$cur")); return 0 ;;
         --shell) COMPREPLY=($(compgen -W "bash zsh fish" -- "$cur")); return 0 ;;
     esac
 
     # Flag completion when the current token starts with '-' (long-form only — decision 20).
     if [[ "$cur" == -* ]]; then
         COMPREPLY=($(compgen -W \
-            "--version --help --path --list --all --file --relative --no-color --search --store --shell --check --init --completions" \
+            "--version --help --path --list --all --file --relative --no-color --search --store --shell --check --init --link --completions" \
             -- "$cur"))
         return 0
     fi

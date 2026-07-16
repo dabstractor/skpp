@@ -46,10 +46,13 @@ _skilldozer() {
         # flags; decision 20: no short aliases advertised.
         '--check[Validate every skill on disk]'
         '--init[First-run setup: pick/create the skills store]:directory:_files'
+        # --link <dir> (§8.4): like --store/--init, its value is a directory; `:directory:_files`
+        # routes the value slot to file/path completion (the external skill dir to link in).
+        '--link[Link an external skill directory into the store]:directory:_files'
         '--completions[Emit the shell completion script for eval]'
         # `:shell:(bash zsh fish)` routes --shell's value slot to a FIXED enum —
         # offer exactly the three supported shells, nothing else (PRD §14.2). The
-        # third value-routing pattern: --search = free-text (nothing), --store/--init
+        # third value-routing pattern: --search = free-text (nothing), --store/--init/--link
         # = path (_files), --shell = closed enum. --shell is advertised (decision D7).
         '--shell[Force a shell for completion]:shell:(bash zsh fish)'
     )

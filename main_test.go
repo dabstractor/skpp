@@ -3380,3 +3380,361 @@ func TestLoginShellBase(t *testing.T) {
 		}
 	}
 }
+
+// --- run: --link (PRD §8.4) ---
+//
+// --link <dir> symlinks an external skill directory into the store (the npm-link
+// idiom for skills). The tests cover: parseArgs (next-token / '='-form / missing
+// value), run() missing-value + exclusivity exit codes, and the runLink handler
+// (success + resolve-through-symlink, refresh, refuse-to-clobber, refuse non-skill,
+// refuse file target, refuse inside-store, unconfigured store, relative-target
+// absolutization).
+
+// mkExtSkill creates <tempdir>/<name>/SKILL.md and returns that skill directory —
+// the kind of dir you'd point `--link` at. Returns an ABSOLUTE path.
+func mkExtSkill(t *testing.T, name string) string {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), name)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("MkdirAll %s: %v", dir, err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "SKILL.md"),
+		[]byte("---\nname: "+name+"\ndescription: An external skill.\n---\n# body\n"), 0o644); err != nil {
+		t.Fatalf("write SKILL.md: %v", err)
+	}
+	return dir
+}
+
+// parseArgs: `--link <dir>` (next-token form) sets link + linkTarget, leaves tags
+// empty (the dir is a flag VALUE, not a positional — §6.3 namespace safety).
+func TestParseArgsLinkNextToken(t *testing.T) {
+	c := parseArgs([]string{"--link", "/path/to/skill"})
+	if !c.link {
+		t.Errorf("c.link=false; want true")
+	}
+	if c.linkTarget != "/path/to/skill" {
+		t.Errorf("c.linkTarget=%q; want %q", c.linkTarget, "/path/to/skill")
+	}
+	if c.linkMissingValue {
+		t.Errorf("c.linkMissingValue=true; want false")
+	}
+	if len(c.tags) != 0 {
+		t.Errorf("c.tags=%v; want empty (dir is a flag value, not a positional)", c.tags)
+	}
+}
+
+// parseArgs: `--link=<dir>` ('='-form) sets link + linkTarget.
+func TestParseArgsLinkEquals(t *testing.T) {
+	c := parseArgs([]string{"--link=/path/to/skill"})
+	if !c.link {
+		t.Errorf("c.link=false; want true")
+	}
+	if c.linkTarget != "/path/to/skill" {
+		t.Errorf("c.linkTarget=%q; want %q", c.linkTarget, "/path/to/skill")
+	}
+	if c.linkMissingValue {
+		t.Errorf("c.linkMissingValue=true; want false")
+	}
+}
+
+// parseArgs: bare `--link` (last token, no value) records linkMissingValue and
+// does NOT set link (no value consumed).
+func TestParseArgsLinkNoValue(t *testing.T) {
+	c := parseArgs([]string{"--link"})
+	if c.link {
+		t.Errorf("c.link=true; want false (no value consumed)")
+	}
+	if !c.linkMissingValue {
+		t.Errorf("c.linkMissingValue=false; want true")
+	}
+}
+
+// parseArgs: `--link=` (empty '='-form) records linkMissingValue (a link with no
+// target is meaningless — mirrors --store=, Issue 2).
+func TestParseArgsLinkEqualsEmpty(t *testing.T) {
+	c := parseArgs([]string{"--link="})
+	if !c.link {
+		t.Errorf("c.link=false; want true")
+	}
+	if c.linkTarget != "" {
+		t.Errorf("c.linkTarget=%q; want empty", c.linkTarget)
+	}
+	if !c.linkMissingValue {
+		t.Errorf("c.linkMissingValue=false; want true")
+	}
+}
+
+// run: `--link` (no value) → exit 2, empty stdout, exact stderr.
+func TestRunLinkNoValueExits2(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := run([]string{"--link"}, &out, &errOut)
+	if code != 2 {
+		t.Fatalf("run(--link): code=%d; want 2 (missing value)", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout=%q; want EMPTY", out.String())
+	}
+	if got, want := errOut.String(), "skilldozer: --link requires a path to a skill directory\n"; got != want {
+		t.Errorf("stderr=%q; want %q", got, want)
+	}
+}
+
+// run: `--link=` (empty '='-form) → exit 2, empty stdout.
+func TestRunLinkEqualsEmptyExits2(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := run([]string{"--link="}, &out, &errOut)
+	if code != 2 {
+		t.Fatalf("run(--link=): code=%d; want 2", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout=%q; want EMPTY", out.String())
+	}
+}
+
+// run: `--link <dir> <tag>` → exit 2 (--link is an exclusive mode; tags forbidden).
+func TestRunLinkWithTagsExits2(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := run([]string{"--link", "/tmp/foo", "sometag"}, &out, &errOut)
+	if code != 2 {
+		t.Fatalf("run(--link /tmp/foo sometag): code=%d; want 2 (tags + link mode)", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout=%q; want EMPTY", out.String())
+	}
+}
+
+// run: `--link <dir> --check` → exit 2 (modes mutually exclusive).
+func TestRunLinkWithModeExits2(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := run([]string{"--link", "/tmp/foo", "--check"}, &out, &errOut)
+	if code != 2 {
+		t.Fatalf("run(--link /tmp/foo --check): code=%d; want 2 (modes)", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout=%q; want EMPTY", out.String())
+	}
+}
+
+// runLink success: an external skill dir is symlinked into the store; stdout is the
+// link path, exit 0, and the linked skill resolves by tag through discovery (§7.1
+// symlink-following).
+func TestRunLinkSuccess(t *testing.T) {
+	store := t.TempDir()
+	t.Setenv("SKILLDOZER_SKILLS_DIR", store) // rule 1 wins deterministically
+	ext := mkExtSkill(t, "linked")
+
+	var out, errOut bytes.Buffer
+	code := run([]string{"--link", ext}, &out, &errOut)
+	if code != 0 {
+		t.Fatalf("run(--link %s): code=%d; want 0", ext, code)
+	}
+	linkPath := filepath.Join(store, "linked")
+	if got, want := out.String(), linkPath+"\n"; got != want {
+		t.Errorf("stdout=%q; want %q (the link path)", got, want)
+	}
+	// The symlink was actually created and points at the external dir.
+	fi, err := os.Lstat(linkPath)
+	if err != nil {
+		t.Fatalf("Lstat link: %v", err)
+	}
+	if fi.Mode()&os.ModeSymlink == 0 {
+		t.Errorf("%s is not a symlink (mode=%v)", linkPath, fi.Mode())
+	}
+	if target, err := os.Readlink(linkPath); err != nil || target != ext {
+		t.Errorf("Readlink=%q err=%v; want %q", target, err, ext)
+	}
+	if msg := errOut.String(); !strings.Contains(msg, "Linked") || !strings.Contains(msg, "SKILLDOZER_SKILLS_DIR") {
+		t.Errorf("stderr=%q; want a 'Linked … -> …' confirmation + the found-via label", msg)
+	}
+
+	// The linked skill now resolves by tag (discovery follows the symlink and
+	// reports it under its on-disk link name, so the tag is "linked").
+	var out2, errOut2 bytes.Buffer
+	if code := run([]string{"linked"}, &out2, &errOut2); code != 0 {
+		t.Fatalf("run(linked) after link: code=%d; want 0", code)
+	}
+	if got, want := out2.String(), linkPath+"\n"; got != want {
+		t.Errorf("run(linked) stdout=%q; want %q (resolves via the symlink)", got, want)
+	}
+}
+
+// runLink refresh: re-linking an existing symlink re-points it (exit 0), matching
+// the install.sh "If a symlink already exists, refresh it" precedent (§12.1 step 5).
+func TestRunLinkRefreshSymlink(t *testing.T) {
+	store := t.TempDir()
+	t.Setenv("SKILLDOZER_SKILLS_DIR", store)
+	ext1 := mkExtSkill(t, "linked")
+	ext2 := mkExtSkill(t, "linked") // same basename → same link name, different target
+	linkPath := filepath.Join(store, "linked")
+
+	var out1, errOut1 bytes.Buffer
+	if code := run([]string{"--link", ext1}, &out1, &errOut1); code != 0 {
+		t.Fatalf("first --link: code=%d; want 0", code)
+	}
+	if target, _ := os.Readlink(linkPath); target != ext1 {
+		t.Fatalf("after first link: target=%q; want %q", target, ext1)
+	}
+
+	// Re-link to ext2: the existing symlink is refreshed (re-pointed), exit 0.
+	var out2, errOut2 bytes.Buffer
+	if code := run([]string{"--link", ext2}, &out2, &errOut2); code != 0 {
+		t.Fatalf("refresh --link: code=%d; want 0 (symlink refresh)", code)
+	}
+	if target, _ := os.Readlink(linkPath); target != ext2 {
+		t.Errorf("after refresh: target=%q; want %q (symlink should be re-pointed)", target, ext2)
+	}
+}
+
+// runLink refuses to clobber a real (non-symlink) directory at the link name — the
+// "never clobber" guardrail (§17) applied to --link. The real dir is left intact.
+func TestRunLinkRefusesNonSymlink(t *testing.T) {
+	store := t.TempDir()
+	t.Setenv("SKILLDOZER_SKILLS_DIR", store)
+	ext := mkExtSkill(t, "linked")
+	// Pre-create a REAL directory at the link name (genuine data — must not be touched).
+	realDir := filepath.Join(store, "linked")
+	if err := os.MkdirAll(realDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+
+	var out, errOut bytes.Buffer
+	code := run([]string{"--link", ext}, &out, &errOut)
+	if code != 1 {
+		t.Fatalf("run(--link over real dir): code=%d; want 1 (refuse to clobber)", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout=%q; want EMPTY", out.String())
+	}
+	if !strings.Contains(errOut.String(), "not a symlink") {
+		t.Errorf("stderr=%q; want a 'not a symlink' refusal", errOut.String())
+	}
+	// The real directory is untouched (still a real dir, not a symlink).
+	fi, err := os.Lstat(realDir)
+	if err != nil {
+		t.Fatalf("Lstat real dir: %v", err)
+	}
+	if fi.Mode()&os.ModeSymlink != 0 {
+		t.Errorf("real dir at %s was replaced by a symlink (must be left intact)", realDir)
+	}
+}
+
+// runLink refuses a target that contains no SKILL.md anywhere (almost certainly a
+// mistake). No link is created.
+func TestRunLinkRefusesNonSkill(t *testing.T) {
+	store := t.TempDir()
+	t.Setenv("SKILLDOZER_SKILLS_DIR", store)
+	empty := filepath.Join(t.TempDir(), "noskill") // a dir with no SKILL.md
+	if err := os.MkdirAll(empty, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	var out, errOut bytes.Buffer
+	code := run([]string{"--link", empty}, &out, &errOut)
+	if code != 1 {
+		t.Fatalf("run(--link non-skill): code=%d; want 1", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout=%q; want EMPTY", out.String())
+	}
+	if !strings.Contains(errOut.String(), "no SKILL.md") {
+		t.Errorf("stderr=%q; want a 'no SKILL.md' message", errOut.String())
+	}
+	if _, err := os.Lstat(filepath.Join(store, "noskill")); !os.IsNotExist(err) {
+		t.Errorf("a link/dir was created in the store; want nothing")
+	}
+}
+
+// runLink refuses a target that is a regular file (not a directory).
+func TestRunLinkRefusesFileTarget(t *testing.T) {
+	store := t.TempDir()
+	t.Setenv("SKILLDOZER_SKILLS_DIR", store)
+	file := filepath.Join(t.TempDir(), "askill") // a regular FILE named "askill"
+	if err := os.WriteFile(file, []byte("not a dir"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	var out, errOut bytes.Buffer
+	code := run([]string{"--link", file}, &out, &errOut)
+	if code != 1 {
+		t.Fatalf("run(--link file): code=%d; want 1", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout=%q; want EMPTY", out.String())
+	}
+}
+
+// runLink refuses a target that is the store itself or lives inside it (self-link /
+// recursive-link footgun).
+func TestRunLinkRefusesInsideStore(t *testing.T) {
+	store := t.TempDir()
+	t.Setenv("SKILLDOZER_SKILLS_DIR", store)
+	// A skill dir living INSIDE the store already.
+	inside := filepath.Join(store, "real", "deep")
+	if err := os.MkdirAll(inside, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(inside, "SKILL.md"),
+		[]byte("---\nname: deep\ndescription: x\n---\n"), 0o644); err != nil {
+		t.Fatalf("write SKILL.md: %v", err)
+	}
+	var out, errOut bytes.Buffer
+	if code := run([]string{"--link", inside}, &out, &errOut); code != 1 {
+		t.Fatalf("run(--link inside-store): code=%d; want 1", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout=%q; want EMPTY", out.String())
+	}
+	if !strings.Contains(errOut.String(), "inside the store") {
+		t.Errorf("stderr=%q; want an 'inside the store' refusal", errOut.String())
+	}
+	// Also refuse linking the store itself.
+	var out2, errOut2 bytes.Buffer
+	if code := run([]string{"--link", store}, &out2, &errOut2); code != 1 {
+		t.Fatalf("run(--link store-itself): code=%d; want 1", code)
+	}
+}
+
+// runLink surfaces the unconfigured hint when no store resolves (stderr one-liner,
+// exit 1, empty stdout — the §6.4 failure shape).
+func TestRunLinkUnconfiguredExits1(t *testing.T) {
+	unsetSkillsEnv(t)
+	t.Chdir(t.TempDir()) // force all §8.3 rules to miss
+	ext := mkExtSkill(t, "linked")
+	var out, errOut bytes.Buffer
+	code := run([]string{"--link", ext}, &out, &errOut)
+	if code != 1 {
+		t.Fatalf("run(--link) unconfigured: code=%d; want 1", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout=%q; want EMPTY", out.String())
+	}
+	if !strings.Contains(errOut.String(), "skilldozer --init") {
+		t.Errorf("stderr=%q; want the unconfigured hint mentioning `skilldozer --init`", errOut.String())
+	}
+}
+
+// runLink absolutizes a relative target against cwd, so the stored symlink target
+// is stable regardless of where discovery later resolves it from.
+func TestRunLinkAbsolutizesRelativeTarget(t *testing.T) {
+	store := t.TempDir()
+	t.Setenv("SKILLDOZER_SKILLS_DIR", store)
+	work := t.TempDir()
+	ext := filepath.Join(work, "linked")
+	if err := os.MkdirAll(ext, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(ext, "SKILL.md"),
+		[]byte("---\nname: linked\ndescription: x\n---\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	t.Chdir(work) // so "./linked" resolves under <work>
+
+	var out, errOut bytes.Buffer
+	code := run([]string{"--link", "./linked"}, &out, &errOut)
+	if code != 0 {
+		t.Fatalf("run(--link ./linked): code=%d; want 0", code)
+	}
+	// The symlink target must be the ABSOLUTE path, not "./linked".
+	if target, _ := os.Readlink(filepath.Join(store, "linked")); target != ext {
+		t.Errorf("symlink target=%q; want %q (relative input must be absolutized)", target, ext)
+	}
+	_ = errOut
+}
