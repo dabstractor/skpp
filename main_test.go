@@ -3174,6 +3174,35 @@ func TestRunCompletionBashScript(t *testing.T) {
 	}
 }
 
+// TestRunCompletionBashListsAmbiguous locks PRD §14.7 for bash: the emitted script
+// sets show-all-if-ambiguous ON (first Tab lists every prefix match, not a silent
+// halt at the common prefix), discloses the change, and provides the one-line
+// opt-out. bash is emitted verbatim, so this also covers the on-disk
+// completions/skilldozer.bash.
+func TestRunCompletionBashListsAmbiguous(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := run([]string{"--completions", "--shell", "bash"}, &out, &errOut)
+	if code != 0 {
+		t.Fatalf("run(completion --shell bash): code=%d; want 0", code)
+	}
+	if errOut.Len() != 0 {
+		t.Fatalf("stderr=%q; want empty on success", errOut.String())
+	}
+	script := out.String()
+	// §14.7 active option: list all ambiguous matches on the first Tab.
+	if !strings.Contains(script, "show-all-if-ambiguous on") {
+		t.Errorf("bash completion missing the §14.7 active 'show-all-if-ambiguous on':\n%s", script)
+	}
+	// §14.7 disclosed opt-out: a user can restore stock bash behavior after eval.
+	if !strings.Contains(script, "show-all-if-ambiguous off") {
+		t.Errorf("bash completion missing the §14.7 opt-out 'show-all-if-ambiguous off':\n%s", script)
+	}
+	// The interactivity guard (bash's `bind` warns when sourced non-interactively).
+	if !strings.Contains(script, "*i*") {
+		t.Errorf("bash completion missing the '*i*' interactivity guard for bind:\n%s", script)
+	}
+}
+
 // TestRunCompletionFishScript locks the §13 acceptance: `completion --shell fish`
 // → exit 0, stdout contains the fish-script marker.
 func TestRunCompletionFishScript(t *testing.T) {
@@ -3295,6 +3324,14 @@ func TestZshEvalScriptRegistersCompdef(t *testing.T) {
 		"autoload -Uz compinit",
 		"(( $+functions[compdef] )) || compinit", // bootstrap only if compdef absent
 		"compdef _skilldozer skilldozer",         // explicit registration
+		// §14.7 active + opt-out (list every ambiguous match on the first Tab, with a
+		// one-line restore). The active token is newline-anchored so it matches the
+		// real command line, NOT the `# setopt NO_LIST_AMBIGUOUS ...` explanatory
+		// comment earlier in the wrapper (a bare substring would false-match that
+		// comment and let a dropped active line slip through). The opt-out token is
+		// unique to its (commented) line, so it needs no anchor.
+		"\nsetopt NO_LIST_AMBIGUOUS\n", // §14.7 active: list all ambiguous matches on first Tab
+		"setopt LIST_AMBIGUOUS",        // §14.7 opt-out (commented in the script; substring present)
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("zshEvalScript: missing %q in eval output:\n%s", want, got)
@@ -3329,6 +3366,11 @@ func TestRunCompletionZshIsEvalSafe(t *testing.T) {
 	}
 	if !strings.Contains(script, "compdef _skilldozer skilldozer") {
 		t.Errorf("zsh eval output missing compdef registration:\n%s", script)
+	}
+	// §14.7: the derived wrapper sets NO_LIST_AMBIGUOUS so the first Tab lists every prefix
+	// match instead of halting silently at the common prefix.
+	if !strings.Contains(script, "NO_LIST_AMBIGUOUS") {
+		t.Errorf("zsh eval output missing the §14.7 NO_LIST_AMBIGUOUS listing option:\n%s", script)
 	}
 	// And it must NOT equal the verbatim autoload file (the derivation is load-bearing).
 	onDisk, err := os.ReadFile("completions/_skilldozer")
