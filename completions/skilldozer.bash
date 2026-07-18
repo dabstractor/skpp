@@ -35,9 +35,22 @@ _skilldozer_completion() {
     # Value-taking flags: route the value slot away from tag completion.
     #   --search        -> free-text query  -> offer NOTHING (return 0 with empty COMPREPLY).
     #   --store/--init  -> directory value  -> complete DIRECTORIES via compgen -d.
-    #   --link          -> directory value  -> complete DIRECTORIES via compgen -d (§8.4).
+    #   --link          -> directory value  -> complete DIRECTORIES via compgen -d at EVERY
+    #                     position after --link (§8.4 multi-link; see the guard below).
     #   --shell         -> fixed enum       -> offer "bash zsh fish" via compgen -W.
     # (--store/--init/--link WANT path completion, unlike --search's free-text -> nothing.)
+
+    # Multi-link directory completion (§8.4 / §14.1 rule 5): once `--link` appears
+    # anywhere before the cursor, EVERY following POSITIONAL completes to a directory
+    # (--link takes many dirs). Dashed tokens are still flags, so only fire when the
+    # current token is a positional (cur does not start with '-'). The first position
+    # after --link is also caught here (and by the case below) — redundant but harmless.
+    if [[ "$cur" != -* ]]; then
+        local i
+        for ((i=1; i<cword; i++)); do
+            [[ "${words[i]}" == "--link" ]] && { COMPREPLY=($(compgen -d -- "$cur")); return 0; }
+        done
+    fi
     case "$prev" in
         --search) return 0 ;;
         --store|--init|--link) COMPREPLY=($(compgen -d -- "$cur")); return 0 ;;

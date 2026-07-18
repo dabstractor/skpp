@@ -61,10 +61,21 @@ _skilldozer() {
 
     case "$state" in
         args)
-            # Positionals are ALWAYS skills (decision 19: no bare subcommands),
-            # and skills are never mutually exclusive — offer them on every
-            # positional <tab>, first or later.
-            compadd -- "$tags[@]"
+            # Multi-link directory completion (§8.4 / §14.1 rule 5): once `--link` has
+            # been typed before the cursor, EVERY following positional is a directory
+            # to link (not a tag). `${words[(i)--link]}` = first index of --link (or
+            # past-end if absent); `< CURRENT` ⇒ --link is a completed word before
+            # the cursor. Flag/value routing is unaffected (dashed tokens + flag
+            # value slots never reach this `args` state — _arguments handles them
+            # inline and returns 0, skipping this case).
+            if (( ${words[(i)--link]} < CURRENT )); then
+                _files
+            else
+                # Positionals are ALWAYS skills (decision 19: no bare subcommands),
+                # and skills are never mutually exclusive — offer them on every
+                # positional <tab>, first or later.
+                compadd -- "$tags[@]"
+            fi
             ;;
     esac
 }

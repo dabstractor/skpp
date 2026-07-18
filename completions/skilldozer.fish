@@ -37,6 +37,13 @@ complete -c skilldozer -l init        -d 'First-run setup: pick/create the skill
 # --link <dir> (§8.4): like --store/--init, its value is a directory; `-r` routes
 # the value slot to file/dir completion (the external skill dir to link in).
 complete -c skilldozer -l link        -d 'Link an external skill directory into the store' -r
+# Multi-link directory completion (§8.4 / §14.1 rule 5): once `--link` has been
+# typed, EVERY following positional is a directory to link (not a tag). Fires at
+# every position after --link (the first position is handled by -r above).
+# `commandline -opc` = tokens up to (NOT including) the current token, so this is
+# false while typing --link itself and true once it is a completed word.
+complete -c skilldozer -n 'string match -q -- "--link" (commandline -opc)' \
+    -a '(__fish_complete_directories)' -d 'skill directory to link'
 complete -c skilldozer -l completions -d 'Emit the shell completion script for eval'
 # --search takes a free-text query, so NO completion is offered after it.
 # We deliberately do NOT pass -r here: in fish 4.x `-r` switches into
@@ -63,7 +70,9 @@ complete -c skilldozer -l shell -d 'Force a shell for completion' -x -a "bash zs
 
 # Dynamic tags: ONE directive with command substitution (NOT a hardcoded line per
 # tag — the store is manifest-free and changes as skills are added). Suppressed
-# only when the previous arg is --search (free-text query — no tag completion
-# there). No subcommand guard: positionals are ALWAYS skills (decision 19).
-complete -c skilldozer -n 'not __fish_prev_arg_in --search' \
+# when the previous arg is --search (free-text query — no tag completion there)
+# AND when --link has been seen (post-link positionals are dirs, not tags — §8.4
+# multi-link: the dir directive above owns those positions via mutual exclusion).
+# No subcommand guard: positionals are ALWAYS skills (decision 19).
+complete -c skilldozer -n 'not __fish_prev_arg_in --search; and not string match -q -- "--link" (commandline -opc)' \
     -a '(skilldozer --relative --all 2>/dev/null)' -d 'skill tag'
