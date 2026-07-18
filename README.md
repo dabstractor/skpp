@@ -150,9 +150,11 @@ multiple tags are given, any unresolved tag causes nothing to be printed and
 exit 1, so `pi` never sees a partial result. The `--path`, `--list`, `--search`,
 and `--all` modes are mutually exclusive — combining any two exits 2, as does
 combining a tag with any of them (a tag resolves one path; those modes inspect
-the whole store). `--link` is another such mode. The flags that take a value —
-`--store`, `--search`, `--shell`, and `--link` — all exit 2 when given as the
-last token with nothing after them, rather than guessing a value.
+the whole store). `--link` is another exclusive mode: it collects **one or more**
+directory positionals, so `--link` with nothing after it exits 2 rather than
+linking nothing. The single-value flags — `--store`, `--search`, and `--shell` —
+likewise exit 2 when given as the last token with nothing after them, rather than
+guessing a value.
 
 `skilldozer --help` lists every flag.
 
@@ -337,10 +339,12 @@ Once loaded, completions are **skills-first and long-form-only**:
   `--path`, `--relative`, `--search`, `--shell`, `--store`, `--version` — narrowed
   by what you type after the dash. Short aliases (`-a`, `-l`, …) stay valid for
   typing but are deliberately not advertised.
-- `skilldozer --init <tab>`, `skilldozer --link <tab>`, and `skilldozer --store <tab>`
-  offer directories (a path value); `skilldozer --search <tab>` offers nothing
-  (free-text); `skilldozer --shell <tab>` offers the three supported shells —
-  `bash`, `zsh`, and `fish`.
+- `skilldozer --init <tab>` and `skilldozer --store <tab>` offer a single directory
+  (a path value); `skilldozer --search <tab>` offers nothing (free-text);
+  `skilldozer --shell <tab>` offers the three supported shells — `bash`, `zsh`, and
+  `fish`. `skilldozer --link <tab>` offers directories too, and keeps offering them
+  at **every** following positional (`--link d1 <tab>`, `--link d1 d2 <tab>`, …),
+  because `--link` batches one or more directories.
 
 This works because every action that is not a skill tag is a `--flag` —
 `--check`, `--init`, and `--completions` are flags, not bare subcommands — so the
